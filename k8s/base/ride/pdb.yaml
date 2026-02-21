@@ -1,0 +1,14 @@
+# PDB ensures at least 1 ride pod is always available
+# during voluntary disruptions (node drains, cluster upgrades).
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ride
+  namespace: rideshare
+  labels:
+    app.kubernetes.io/name: ride
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ride

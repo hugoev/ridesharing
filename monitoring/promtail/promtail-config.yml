@@ -1,0 +1,56 @@
+# Promtail ships logs from the gateway container to Loki.
+server:
+  http_listen_port: 9080
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # Scrape Docker container logs via the Docker daemon socket
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      # Only scrape containers with the "logging=promtail" label
+      - source_labels: ["__meta_docker_container_label_logging"]
+        regex: "promtail"
+        action: keep
+      # Use the container name as the job label
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/(.*)"
+        target_label: "container"
+      # Tag with compose service name
+      - source_labels: ["__meta_docker_container_label_com_docker_compose_service"]
+        target_label: "service"
+    pipeline_stages:
+      # Parse JSON log lines
+      - json:
+          expressions:
+            level: level
+            trace_id: trace_id
+            msg: message
+      - labels:
+          level:
+          trace_id:
+
+  # Scrape log files from the gateway (when running on host)
+  - job_name: gateway-files
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: rideshare-gateway
+          __path__: /var/log/rideshare/*.log
+    pipeline_stages:
+      - json:
+          expressions:
+            level: level
+            trace_id: trace_id
+            msg: message
+      - labels:
+          level:
+          trace_id:

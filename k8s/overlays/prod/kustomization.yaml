@@ -1,0 +1,60 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+
+namePrefix: prod-
+
+patches:
+  - patch: |-
+      # Ensure high availability and production scale
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: gateway
+        namespace: rideshare
+      spec:
+        replicas: 3
+  - patch: |-
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: gateway
+        namespace: rideshare
+      spec:
+        minReplicas: 3
+        maxReplicas: 50
+  - patch: |-
+      # Update ingress host with real domain
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: kongs-gateway-ingress
+        namespace: rideshare
+      spec:
+        rules:
+          - host: api.rideshare.example.com
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: gateway
+                      port:
+                        number: 8080
+  - patch: |-
+      # Remove placeholder secrets in prod (they should be injected externally e.g., Vault or External Secrets)
+      $patch: delete
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: gateway-secrets
+        namespace: rideshare
+  - patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: grafana-secret
+        namespace: rideshare

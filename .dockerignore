@@ -1,0 +1,30 @@
+# Build artifacts
+/rideshare-gateway
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test
+coverage.out
+*.test
+
+# Docker volumes
+pgdata/
+promdata/
+grafanadata/
+jaegerdata/
+lokidata/
+
+# Monitoring configs (mounted, not copied)
+monitoring/
+
+# Git
+.git/
+.gitignore

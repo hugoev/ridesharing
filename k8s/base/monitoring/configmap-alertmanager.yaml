@@ -1,0 +1,68 @@
+apiVersion: v1
+data:
+  alertmanager.yml: |
+    # Alertmanager configuration for the RideShare platform.
+    # Routes alerts from Prometheus to the appropriate notification channels.
+
+    global:
+      resolve_timeout: 5m
+
+    # Inhibition rules suppress lower-severity alerts when higher-severity ones fire.
+    inhibit_rules:
+      - source_matchers:
+          - severity = critical
+        target_matchers:
+          - severity = warning
+        equal: ["alertname"]
+
+    # Route tree — matches alerts to receivers.
+    route:
+      receiver: default-slack
+      group_by: ["alertname", "team"]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+
+      routes:
+        # Critical alerts → PagerDuty (page on-call immediately)
+        - matchers:
+            - severity = critical
+          receiver: pagerduty-critical
+          group_wait: 10s
+          repeat_interval: 1h
+
+        # Warning alerts → Slack (team channel)
+        - matchers:
+            - severity = warning
+          receiver: default-slack
+          group_wait: 1m
+          repeat_interval: 4h
+
+    # Notification receivers.
+    # Replace webhook URLs with real values in production.
+    receivers:
+      - name: default-slack
+        slack_configs:
+          - api_url: "https://hooks.slack.com/services/REPLACE/WITH/REAL_WEBHOOK"
+            channel: "#rideshare-alerts"
+            title: '{{ template "slack.default.title" . }}'
+            text: >-
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Severity:* {{ .Labels.severity }}
+              *Team:* {{ .Labels.team }}
+              *Description:* {{ .Annotations.description }}
+              {{ if .Annotations.runbook }}*Runbook:* {{ .Annotations.runbook }}{{ end }}
+              {{ end }}
+            send_resolved: true
+
+      - name: pagerduty-critical
+        pagerduty_configs:
+          - service_key: "REPLACE_WITH_PAGERDUTY_SERVICE_KEY"
+            severity: '{{ .CommonLabels.severity }}'
+            description: '{{ .CommonAnnotations.summary }}'
+            details:
+              firing: '{{ template "pagerduty.default.description" . }}'
+kind: ConfigMap
+metadata:
+  name: alertmanager-config

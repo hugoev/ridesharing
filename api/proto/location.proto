@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package location;
+option go_package = "github.com/hugovillarreal/ridesharing/pkg/pb;pb";
+
+import "google/protobuf/timestamp.proto";
+
+service LocationService {
+  rpc UpdateLocation (UpdateLocationRequest) returns (UpdateLocationResponse) {}
+  rpc GetNearbyDrivers (GetNearbyDriversRequest) returns (GetNearbyDriversResponse) {}
+  rpc ActiveDriverCount (ActiveDriverCountRequest) returns (ActiveDriverCountResponse) {}
+}
+
+message ActiveDriverCountRequest {
+  double lat = 1;
+  double long = 2;
+  double radius_km = 3;
+}
+
+message ActiveDriverCountResponse {
+  int32 count = 1;
+}
+
+message UpdateLocationRequest {
+  string user_id = 1;
+  double lat = 2;
+  double long = 3;
+}
+
+message UpdateLocationResponse {
+  bool success = 1;
+}
+
+message GetNearbyDriversRequest {
+  double lat = 1;
+  double long = 2;
+  double radius_km = 3;
+}
+
+message NearbyDriver {
+  string driver_id = 1;
+  double lat = 2;
+  double long = 3;
+  double distance_km = 4;
+  int32 estimated_eta = 5;
+}
+
+message GetNearbyDriversResponse {
+  repeated NearbyDriver drivers = 1;
+}

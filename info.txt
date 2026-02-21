@@ -1,0 +1,232 @@
+Ride-Sharing Dispatch System Documentation
+This documentation provides a comprehensive guide to building an enterprise-level ride-sharing dispatch backend system in Golang, inspired by Uber's architecture. The goal is to create a scalable, reliable, and secure system without shortcuts, meaning you'll implement core logic from scratch where possible (e.g., custom matching algorithms instead of relying on third-party services for everything). This project emphasizes modern backend practices like microservices, event-driven design, concurrency handling with Goroutines, and resilience patterns.
+The system simulates key aspects of a ride-sharing platform: user/driver registration, ride requests, real-time matching, location tracking, payments, and notifications. It's designed for high throughput, handling concurrent requests, and can be extended to distributed deployments.
+Project Overview
+Goals
+
+Build a full backend system that mimics Uber's dispatch logic at a smaller scale.
+Gain experience in distributed systems, geospatial queries, real-time communication, and fault-tolerant design.
+Use Golang exclusively for core services to leverage its performance in concurrent environments.
+Ensure the system is modular, testable, and deployable on cloud infrastructure.
+
+Assumptions
+
+Users interact via a hypothetical frontend (e.g., mobile app) sending HTTP/gRPC requests.
+No frontend implementation is required; focus on backend APIs and services.
+Simulate external integrations (e.g., payments via Stripe stubs, maps via in-memory geospatial data).
+Target scalability for 1,000+ concurrent users in a local setup, extensible to cloud.
+
+Prerequisites
+
+Golang 1.21+ installed.
+Basic knowledge of Golang (Goroutines, channels, net/http, sync packages).
+Familiarity with Docker, Kubernetes (for deployment), and Git for version control.
+Accounts for cloud services (e.g., AWS/GCP for deployment, Stripe sandbox for payments).
+Install third-party Golang packages via go get (e.g., github.com/gin-gonic/gin for routing, github.com/jackc/pgx for PostgreSQL).
+
+Architecture
+Adopt a microservices architecture to promote scalability and independence, similar to Uber's service-oriented design. Services communicate via gRPC for internal calls (efficient, binary protocol) and HTTP/REST for external APIs.
+High-Level Components
+
+Auth Service: Handles user/driver authentication and authorization.
+User Service: Manages profiles for riders and drivers.
+Ride Service: Core dispatch logic for requesting, matching, and managing rides.
+Location Service: Tracks real-time positions using geospatial data.
+Payment Service: Simulates payment processing and invoicing.
+Notification Service: Sends real-time updates (e.g., via WebSockets or push notifications).
+Gateway/API Proxy: Single entry point for external requests (e.g., using Gin or Gorilla Mux).
+
+Data Flow Example
+
+Rider requests a ride → Gateway → Ride Service → Location Service (find nearest driver) → Notification Service (alert driver).
+Use Kafka for asynchronous events (e.g., ride accepted → trigger payment hold).
+Redis for caching (e.g., active driver locations) to reduce DB load.
+
+Diagram (Text-Based)
+text[Frontend/App] --> [API Gateway (HTTP/gRPC)]
+                  |
+                  +-- [Auth Service] (JWT/OAuth2)
+                  |
+                  +-- [User Service] (Profiles)
+                  |
+                  +-- [Ride Service] (Matching, ETA)
+                  |     |
+                  |     +-- [Location Service] (Geospatial Tracking)
+                  |
+                  +-- [Payment Service] (Stripe Integration)
+                  |
+                  +-- [Notification Service] (WebSockets/Kafka)
+
+Databases: PostgreSQL (Main), Redis (Cache/PubSub), Kafka (Events)
+Tech Stack
+
+Language: Golang (standard lib + packages like net/http, encoding/json, sync, context).
+Web Framework: Gin or Echo for HTTP routing; gRPC-Go for inter-service communication.
+Databases:
+PostgreSQL with PostGIS extension for geospatial data (queries like ST_Distance for proximity).
+Redis for caching, sessions, and pub/sub (e.g., driver locations updated every 10s).
+Optional: MongoDB for unstructured logs if needed.
+
+Messaging: Apache Kafka or RabbitMQ for event streaming (e.g., ride events).
+Caching: Redis.
+Authentication: JWT (github.com/golang-jwt/jwt) or OAuth2.
+Real-Time: Gorilla WebSocket for bi-directional comms (e.g., live tracking).
+Monitoring/Logging: Prometheus for metrics, Grafana for dashboards, ELK Stack (Elasticsearch, Logstash, Kibana) for logs.
+Testing: Go's testing package, Vegeta for load testing, Mockery for mocks.
+Deployment: Docker for containerization, Kubernetes for orchestration, Helm for charts.
+CI/CD: GitHub Actions or Jenkins for automated builds/tests/deploys.
+Other Tools: Postman/Newman for API testing, Draw.io for diagrams.
+
+Avoid over-reliance on ORMs; use raw SQL or lightweight ones like GORM for learning purposes.
+Key Features to Implement
+1. Authentication and Authorization
+
+User/driver signup/login (email/password, social OAuth).
+JWT token generation and validation.
+Role-based access (rider vs. driver endpoints).
+
+2. User Profiles
+
+CRUD operations for profiles (name, phone, vehicle for drivers).
+Verification (e.g., email OTP simulation).
+
+3. Ride Management
+
+Request ride: Provide pickup/dropoff coords, estimate fare/ETA.
+Matching: Algorithm to find nearest available driver (use Haversine formula or quadtree for efficiency).
+Accept/Decline: Driver responds in real-time.
+Cancel/Complete: Handle states with FSM (Finite State Machine) in code.
+Surge Pricing: Dynamic based on demand (e.g., active requests in area > threshold).
+
+4. Location Tracking
+
+Drivers update location periodically (e.g., every 5s via API).
+Store in Redis for fast queries; persist to PostgreSQL.
+Geospatial queries: Find drivers within radius (PostGIS: ST_Contains, ST_DWithin).
+
+5. Payments
+
+Integrate Stripe API for card tokenization and charges (use test keys).
+Hold funds on ride start, charge on completion.
+Invoice generation (PDF via GoFPDF package).
+
+6. Notifications
+
+Real-time: WebSockets for ride updates (e.g., driver arriving).
+Async: Kafka for events like "ride matched" → email/SMS simulation.
+
+7. Analytics and Monitoring
+
+Track metrics: Ride completion rate, average ETA accuracy.
+Logging: Structured logs with context (e.g., request ID tracing).
+
+Database Schema (PostgreSQL Example)
+Use migrations (e.g., with Golang-migrate).
+
+users Table:
+id (UUID PK)
+email (string unique)
+password_hash (string)
+role (enum: rider, driver)
+created_at (timestamp)
+
+drivers Table:
+user_id (FK to users)
+vehicle_type (string)
+license_plate (string)
+is_available (bool)
+
+rides Table:
+id (UUID PK)
+rider_id (FK)
+driver_id (FK nullable)
+pickup_lat, pickup_long (float)
+dropoff_lat, dropoff_long (float)
+status (enum: requested, matched, enroute, completed, cancelled)
+fare (decimal)
+started_at, ended_at (timestamp)
+
+locations Table (for historical tracking):
+id (UUID PK)
+user_id (FK)
+lat, long (float) – Use PostGIS: Add geometry column (POINT)
+timestamp (timestamp)
+
+
+Indexes: On lat/long for geo-queries, on status for active rides.
+API Endpoints
+Design RESTful APIs with versioning (e.g., /v1/). Use OpenAPI/Swagger for spec (generate with swaggo/swag).
+Auth Service
+
+POST /auth/register – Body: {email, password, role}
+POST /auth/login – Returns JWT
+
+User Service
+
+GET /users/{id} – Profile details (auth required)
+PUT /users/{id} – Update profile
+
+Ride Service
+
+POST /rides/request – Body: {pickup: {lat, long}, dropoff: {lat, long}} – Returns ride ID
+GET /rides/{id} – Status and details
+POST /rides/{id}/accept – For drivers
+POST /rides/{id}/complete
+
+Location Service
+
+POST /locations/update – Body: {lat, long} (driver only)
+GET /locations/nearby?lat=X&long=Y&radius=5km – List available drivers
+
+Payment Service
+
+POST /payments/charge – Body: {ride_id, amount}
+
+Secure with HTTPS, rate limiting (e.g., golang.org/x/time/rate).
+Implementation Guide
+Step 1: Setup Project Structure
+
+Create repo: mkdir ride-dispatch && cd ride-dispatch
+Folders: cmd/ (entry points), internal/ (services, models), pkg/ (shared utils), migrations/, docker-compose.yml
+Init: go mod init github.com/yourname/ride-dispatch
+
+Step 2: Implement Core Services
+
+Start with Auth: Use bcrypt for hashing, JWT for tokens.
+Add Database: Connect via pgx, write CRUD funcs.
+Build Ride Matching: Implement Haversine in Go:Gofunc haversine(lat1, lon1, lat2, lon2 float64) float64 {
+    // Formula implementation...
+}
+Handle Concurrency: Use Mutex for shared state, channels for event processing.
+Integrate Kafka: Use segmentio/kafka-go package.
+
+Step 3: Add Resilience
+
+Error Handling: Custom error types, context timeouts.
+Retries: Exponential backoff for external calls (e.g., payments).
+Circuit Breakers: Implement simple one using a state machine.
+
+Step 4: Real-Time Features
+
+WebSockets: Handler for /ws endpoint, broadcast updates via channels.
+
+Step 5: Testing
+
+Unit: Test individual funcs (e.g., matching algo).
+Integration: Use testcontainers-go for spinning up DB/Kafka in tests.
+Load: vegeta attack -duration=10s -rate=100 on endpoints.
+
+Step 6: Deployment
+
+Dockerize each service: Dockerfile with multi-stage builds.
+docker-compose for local: Include DB, Redis, Kafka.
+Kubernetes: Deploy as pods, use secrets for env vars.
+Cloud: Use GCP/AWS; enable auto-scaling.
+
+Best Practices
+
+Code Style: Follow Go idioms (effective-go), use linters (golangci-lint).
+Security: Validate inputs (go-playground/validator), HTTPS, SQL injection prevention.
+Performance: Profile with pprof, optimize hotspots (e.g., geo-queries).
+Documentation: Inline comments, README with setup instructions.
+Versioning: Semantic versioning for services.

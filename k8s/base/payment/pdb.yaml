@@ -1,0 +1,14 @@
+# PDB ensures at least 1 payment pod is always available
+# during voluntary disruptions (node drains, cluster upgrades).
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: payment
+  namespace: rideshare
+  labels:
+    app.kubernetes.io/name: payment
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: payment

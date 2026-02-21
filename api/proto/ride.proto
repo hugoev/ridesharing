@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+package ride;
+option go_package = "github.com/hugovillarreal/ridesharing/pkg/pb;pb";
+
+import "google/protobuf/timestamp.proto";
+
+service RideService {
+  rpc RequestRide (RideRequest) returns (RideResponse) {}
+  rpc AcceptRide (AcceptRideRequest) returns (RideResponse) {}
+  rpc CompleteRide (CompleteRideRequest) returns (RideResponse) {}
+  rpc CancelRide (CancelRideRequest) returns (RideResponse) {}
+  rpc GetRide (GetRideRequest) returns (RideResponse) {}
+  rpc RideHistory (RideHistoryRequest) returns (RideHistoryResponse) {}
+}
+
+message RideRequest {
+  string rider_id = 1;
+  double pickup_lat = 2;
+  double pickup_long = 3;
+  double dropoff_lat = 4;
+  double dropoff_long = 5;
+}
+
+message AcceptRideRequest {
+  string ride_id = 1;
+  string driver_id = 2;
+}
+
+message CompleteRideRequest {
+  string ride_id = 1;
+  string driver_id = 2;
+}
+
+message CancelRideRequest {
+  string ride_id = 1;
+  string user_id = 2;
+}
+
+message GetRideRequest {
+  string ride_id = 1;
+}
+
+message RideHistoryRequest {
+  string user_id = 1;
+  string role = 2; // "rider" or "driver"
+  int32 limit = 3;
+  int32 offset = 4;
+}
+
+message Ride {
+  string id = 1;
+  string rider_id = 2;
+  optional string driver_id = 3;
+  double pickup_lat = 4;
+  double pickup_long = 5;
+  double dropoff_lat = 6;
+  double dropoff_long = 7;
+  string status = 8;
+  double fare = 9;
+  double surge_multiplier = 10;
+  optional int32 estimated_eta = 11;
+  optional double distance_km = 12;
+  google.protobuf.Timestamp started_at = 13;
+  google.protobuf.Timestamp ended_at = 14;
+  google.protobuf.Timestamp created_at = 15;
+  google.protobuf.Timestamp updated_at = 16;
+}
+
+message RideResponse {
+  Ride ride = 1;
+}
+
+message RideHistoryResponse {
+  repeated Ride rides = 1;
+  int32 total = 2;
+}

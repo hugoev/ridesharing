@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package user;
+option go_package = "github.com/hugovillarreal/ridesharing/pkg/pb;pb";
+
+import "google/protobuf/timestamp.proto";
+import "auth.proto"; // for auth.User
+
+service UserService {
+  rpc GetProfile (GetProfileRequest) returns (GetProfileResponse) {}
+  rpc UpdateProfile (UpdateProfileRequest) returns (GetProfileResponse) {}
+  rpc SetAvailability (SetAvailabilityRequest) returns (SetAvailabilityResponse) {}
+}
+
+message Driver {
+  string user_id = 1;
+  string vehicle_type = 2;
+  string license_plate = 3;
+  bool is_available = 4;
+  double rating = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+message GetProfileRequest {
+  string user_id = 1;
+}
+
+message GetProfileResponse {
+  auth.User user = 1;
+  Driver driver = 2; // Optional, set only if user is a driver
+}
+
+message UpdateProfileRequest {
+  string user_id = 1;
+  optional string name = 2;
+  optional string phone = 3;
+  optional string vehicle_type = 4;
+  optional string license_plate = 5;
+}
+
+message SetAvailabilityRequest {
+  string user_id = 1;
+  bool is_available = 2;
+}
+
+message SetAvailabilityResponse {
+  bool success = 1;
+}

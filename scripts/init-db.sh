@@ -1,0 +1,13 @@
+#!/bin/bash
+# This script runs inside the postgres container on first boot only.
+# It executes all *.up.sql migrations in order.
+set -e
+
+echo "Running database migrations..."
+
+for f in /docker-entrypoint-initdb.d/migrations/*.up.sql; do
+    echo "  Applying: $(basename $f)"
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -f "$f"
+done
+
+echo "All migrations applied successfully."

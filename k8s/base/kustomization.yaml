@@ -1,0 +1,58 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: rideshare
+resources:
+  - namespace.yaml
+  - gateway/serviceaccount.yaml
+  - gateway/deployment.yaml
+  - auth/serviceaccount.yaml
+  - auth/deployment.yaml
+  - auth/service.yaml
+  - auth/hpa.yaml
+  - auth/pdb.yaml
+  - auth/configmap.yaml
+  - auth/secrets.yaml
+  - user/serviceaccount.yaml
+  - user/deployment.yaml
+  - user/service.yaml
+  - user/hpa.yaml
+  - user/pdb.yaml
+  - user/configmap.yaml
+  - user/secrets.yaml
+  - ride/serviceaccount.yaml
+  - ride/deployment.yaml
+  - ride/service.yaml
+  - ride/hpa.yaml
+  - ride/pdb.yaml
+  - ride/configmap.yaml
+  - ride/secrets.yaml
+  - location/serviceaccount.yaml
+  - location/deployment.yaml
+  - location/service.yaml
+  - location/hpa.yaml
+  - location/pdb.yaml
+  - location/configmap.yaml
+  - location/secrets.yaml
+  - payment/serviceaccount.yaml
+  - payment/deployment.yaml
+  - payment/service.yaml
+  - payment/hpa.yaml
+  - payment/pdb.yaml
+  - payment/configmap.yaml
+  - payment/secrets.yaml
+  - gateway/service.yaml
+  - gateway/hpa.yaml
+  - gateway/pdb.yaml
+  - gateway/configmap.yaml
+  - gateway/secrets.yaml
+  - postgres/cockroachdb.yaml
+  - redis/statefulset.yaml
+  - kafka/kafka-ha.yaml
+  - monitoring/monitoring.yaml
+  - monitoring/configmap-prometheus.yaml
+  - monitoring/configmap-prometheus-rules.yaml
+  - monitoring/configmap-alertmanager.yaml
+  - monitoring/configmap-loki.yaml
+  - kong-ingress.yaml
+  - network-policies.yaml
+

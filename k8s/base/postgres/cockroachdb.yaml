@@ -1,0 +1,207 @@
+# ── CockroachDB 3-node Cluster ────────────────────────────────
+# Provides Distributed SQL, multi-active reads/writes, and HA.
+apiVersion: v1
+kind: Service
+metadata:
+  # This service only resolves to active participating elements.
+  name: cockroachdb-public
+  namespace: rideshare
+  labels:
+    app.kubernetes.io/name: cockroachdb
+spec:
+  ports:
+    # The main port, served by gRPC, serves Postgres-flavor SQL, inter-node
+    # traffic and the cli.
+    - port: 26257
+      targetPort: 26257
+      name: grpc
+    # The secondary port serves the UI as well as health and debug endpoints.
+    - port: 8080
+      targetPort: 8080
+      name: http
+  selector:
+    app.kubernetes.io/name: cockroachdb
+---
+apiVersion: v1
+kind: Service
+metadata:
+  # This service resolves to all pods. It is needed for bootstrapping.
+  name: cockroachdb
+  namespace: rideshare
+  labels:
+    app.kubernetes.io/name: cockroachdb
+  annotations:
+    service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
+    # Endpoints are created for pods even if unready
+    prometheus.io/scrape: "true"
+    prometheus.io/path: "_status/vars"
+    prometheus.io/port: "8080"
+spec:
+  ports:
+    - port: 26257
+      targetPort: 26257
+      name: grpc
+    - port: 8080
+      targetPort: 8080
+      name: http
+  # We want all pods in the StatefulSet to have their addresses published for
+  # the sake of the other CockroachDB pods even before they're ready, since they
+  # have to be able to talk to each other in order to become ready.
+  publishNotReadyAddresses: true
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: cockroachdb
+---
+# PodDisruptionBudget to ensure quorum during voluntary disruptions
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cockroachdb-budget
+  namespace: rideshare
+  labels:
+    app.kubernetes.io/name: cockroachdb
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cockroachdb
+  maxUnavailable: 1
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: cockroachdb
+  namespace: rideshare
+  labels:
+    app.kubernetes.io/name: cockroachdb
+    app.kubernetes.io/component: database
+spec:
+  serviceName: "cockroachdb"
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cockroachdb
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cockroachdb
+        app.kubernetes.io/component: database
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values: ["cockroachdb"]
+                topologyKey: kubernetes.io/hostname
+      # No pre-stop hook is required, a SIGTERM plus some time is all that's
+      # needed for graceful shutdown of a node.
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: cockroachdb
+          image: cockroachdb/cockroach:v23.2.3
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 2
+              memory: 4Gi
+          ports:
+            - containerPort: 26257
+              name: grpc
+            - containerPort: 8080
+              name: http
+          livenessProbe:
+            httpGet:
+              path: "/health"
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: "/health?ready=1"
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 2
+          volumeMounts:
+            - name: datadir
+              mountPath: /cockroach/cockroach-data
+          env:
+            - name: COCKROACH_CHANNEL
+              value: kubernetes-insecure
+          command:
+            - "/bin/bash"
+            - "-ecx"
+            - "exec /cockroach/cockroach start --logtostderr --insecure --advertise-host $(hostname -f) --http-addr 0.0.0.0 --join cockroachdb-0.cockroachdb,cockroachdb-1.cockroachdb,cockroachdb-2.cockroachdb --cache 25% --max-sql-memory 25%"
+      volumes:
+        - name: datadir
+          persistentVolumeClaim:
+            claimName: datadir
+  volumeClaimTemplates:
+    - metadata:
+        name: datadir
+      spec:
+        accessModes:
+          - "ReadWriteOnce"
+        resources:
+          requests:
+            storage: 20Gi
+---
+# Initialization logic Job to run immediately after the cluster comes up
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cockroachdb-init
+  namespace: rideshare
+  labels:
+    app.kubernetes.io/name: cockroachdb
+spec:
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cockroachdb-init
+    spec:
+      containers:
+        - name: cluster-init
+          image: cockroachdb/cockroach:v23.2.3
+          command:
+            - "/cockroach/cockroach"
+            - "init"
+            - "--insecure"
+            - "--host=cockroachdb-0.cockroachdb"
+        - name: setup-database
+          image: postgres:16-alpine
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Waiting for CockroachDB cluster to be ready..."
+              while ! pg_isready -h cockroachdb-public -p 26257; do sleep 2; done;
+              echo "Creating user and databases..."
+              # Create user and database
+              psql -h cockroachdb-public -p 26257 -U root -c "CREATE USER IF NOT EXISTS rideshare;"
+              psql -h cockroachdb-public -p 26257 -U root -c "CREATE DATABASE IF NOT EXISTS rideshare;"
+              psql -h cockroachdb-public -p 26257 -U root -c "GRANT ALL ON DATABASE rideshare TO rideshare;"
+              
+              # Run migrations
+              echo "Running migrations..."
+              export PGPASSWORD=""
+              for f in /migrations/*.up.sql; do
+                  echo "Applying migration: $f"
+                  psql -v ON_ERROR_STOP=1 -h cockroachdb-public -p 26257 -U rideshare -d rideshare -f "$f"
+              done
+              echo "Setup complete."
+          volumeMounts:
+            - name: migrations
+              mountPath: /migrations
+              readOnly: true
+      restartPolicy: OnFailure
+      volumes:
+        - name: migrations
+          configMap:
+            name: postgres-migrations

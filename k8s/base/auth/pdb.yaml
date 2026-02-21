@@ -1,0 +1,14 @@
+# PDB ensures at least 1 auth pod is always available
+# during voluntary disruptions (node drains, cluster upgrades).
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: auth
+  namespace: rideshare
+  labels:
+    app.kubernetes.io/name: auth
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: auth

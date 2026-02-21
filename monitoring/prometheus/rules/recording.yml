@@ -1,0 +1,48 @@
+# Recording rules pre-compute expensive queries for fast dashboards and alerting.
+# These run on the Prometheus evaluation interval (15s).
+groups:
+  - name: rideshare_recording_rules
+    interval: 15s
+    rules:
+      # ── HTTP RED metrics (pre-computed) ──
+
+      # Request rate per endpoint (5m window)
+      - record: rideshare:http_requests:rate5m
+        expr: sum(rate(http_requests_total[5m])) by (method, path, code)
+
+      # Overall request rate
+      - record: rideshare:http_requests:rate5m:total
+        expr: sum(rate(http_requests_total[5m]))
+
+      # Error rate (5xx / total)
+      - record: rideshare:http_errors:ratio5m
+        expr: >
+          sum(rate(http_requests_total{code=~"5.."}[5m]))
+          /
+          sum(rate(http_requests_total[5m]))
+
+      # p50 latency
+      - record: rideshare:http_duration:p50
+        expr: histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))
+
+      # p95 latency
+      - record: rideshare:http_duration:p95
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))
+
+      # p99 latency
+      - record: rideshare:http_duration:p99
+        expr: histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))
+
+      # ── Business metrics ──
+
+      # Rides per minute by status
+      - record: rideshare:rides:rate5m
+        expr: sum(rate(rides_total[5m])) by (status)
+
+      # Match duration p95
+      - record: rideshare:match_duration:p95
+        expr: histogram_quantile(0.95, sum(rate(ride_match_duration_seconds_bucket[5m])) by (le))
+
+      # Payment median
+      - record: rideshare:payment:p50
+        expr: histogram_quantile(0.50, sum(rate(payment_amount_usd_bucket[5m])) by (le))

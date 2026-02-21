@@ -1,0 +1,45 @@
+# HPA scales ride pods based on CPU and memory utilization.
+# In production, add custom metrics (e.g., requests_per_second) via
+# Prometheus Adapter for more accurate scaling signals.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ride
+  namespace: rideshare
+  labels:
+    app.kubernetes.io/name: ride
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ride
+  minReplicas: 2
+  maxReplicas: 10
+  behavior:
+    # Scale up aggressively for traffic spikes
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Pods
+          value: 4
+          periodSeconds: 60
+    # Scale down conservatively to avoid flapping
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80

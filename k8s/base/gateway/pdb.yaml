@@ -1,0 +1,14 @@
+# PDB ensures at least 1 gateway pod is always available
+# during voluntary disruptions (node drains, cluster upgrades).
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: gateway
+  namespace: rideshare
+  labels:
+    app.kubernetes.io/name: gateway
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gateway

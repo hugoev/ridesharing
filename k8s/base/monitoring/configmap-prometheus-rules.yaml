@@ -1,0 +1,119 @@
+apiVersion: v1
+data:
+  alerts.yml: "# Multi-window, multi-burn-rate SLO alerts.\n# Based on Google SRE
+    Workbook Chapter 5:\n# https://sre.google/workbook/alerting-on-slos/\n#\n# For
+    a 99% availability SLO (1% error budget over 30 days):\n#   Budget = 30d * 24h
+    * 60m * 0.01 = 432 error-minutes\n#\n# Burn rate = how many times faster than
+    normal the budget is being consumed.\n# Alert windows trade off detection time
+    vs. false positive rate.\n\ngroups:\n  - name: rideshare_burnrate_alerts\n    rules:\n
+    \     # ── Fast burn: page ──\n      # 14.4x burn rate over 1h (uses 2% of 30d
+    budget)\n      # Short window (5m) eliminates false positives from blips\n      -
+    alert: ErrorBudgetBurn_Fast\n        expr: >\n          (\n            sum(rate(http_requests_total{code=~\"5..\"}[1h]))\n
+    \           /\n            sum(rate(http_requests_total[1h]))\n          ) > (14.4
+    * 0.01)\n          and\n          (\n            sum(rate(http_requests_total{code=~\"5..\"}[5m]))\n
+    \           /\n            sum(rate(http_requests_total[5m]))\n          ) > (14.4
+    * 0.01)\n        for: 2m\n        labels:\n          severity: critical\n          team:
+    backend\n          slo: availability\n        annotations:\n          summary:
+    \"\U0001F525 Fast error budget burn — 14.4x rate\"\n          description: >\n
+    \           Error rate is consuming the 30-day error budget at 14.4x the\n            sustainable
+    rate. At this pace, the entire budget will be\n            exhausted in ~2 days.\n
+    \         runbook: \"https://wiki.internal/runbooks/error-budget-fast-burn\"\n\n
+    \     # ── Medium burn: page ──\n      # 6x burn rate over 6h (uses 5% of 30d
+    budget)\n      - alert: ErrorBudgetBurn_Medium\n        expr: >\n          (\n
+    \           sum(rate(http_requests_total{code=~\"5..\"}[6h]))\n            /\n
+    \           sum(rate(http_requests_total[6h]))\n          ) > (6 * 0.01)\n          and\n
+    \         (\n            sum(rate(http_requests_total{code=~\"5..\"}[30m]))\n
+    \           /\n            sum(rate(http_requests_total[30m]))\n          ) >
+    (6 * 0.01)\n        for: 5m\n        labels:\n          severity: critical\n          team:
+    backend\n          slo: availability\n        annotations:\n          summary:
+    \"⚠️ Medium error budget burn — 6x rate\"\n          description: >\n            Error
+    rate is consuming the 30-day error budget at 6x the\n            sustainable rate.
+    At this pace, the entire budget will be\n            exhausted in ~5 days.\n          runbook:
+    \"https://wiki.internal/runbooks/error-budget-medium-burn\"\n\n      # ── Slow
+    burn: ticket ──\n      # 1x burn rate over 3d (uses 10% of 30d budget)\n      -
+    alert: ErrorBudgetBurn_Slow\n        expr: >\n          (\n            sum(rate(http_requests_total{code=~\"5..\"}[3d]))\n
+    \           /\n            sum(rate(http_requests_total[3d]))\n          ) > (1
+    * 0.01)\n          and\n          (\n            sum(rate(http_requests_total{code=~\"5..\"}[6h]))\n
+    \           /\n            sum(rate(http_requests_total[6h]))\n          ) > (1
+    * 0.01)\n        for: 30m\n        labels:\n          severity: warning\n          team:
+    backend\n          slo: availability\n        annotations:\n          summary:
+    \"\U0001F4C9 Slow error budget burn — 1x rate\"\n          description: >\n            Error
+    rate is steadily consuming the 30-day error budget.\n            While not immediately
+    critical, this trend will exhaust the\n            budget if left unaddressed.\n
+    \         runbook: \"https://wiki.internal/runbooks/error-budget-slow-burn\"\n\n
+    \     # ── Latency SLO burn rate ──\n      # P99 latency budget: 99% of requests
+    < 2.5s\n      - alert: LatencyBudgetBurn\n        expr: >\n          (\n            1
+    - histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[1h]))
+    by (le)) / 2.5\n          ) < 0\n        for: 5m\n        labels:\n          severity:
+    warning\n          team: backend\n          slo: latency\n        annotations:\n
+    \         summary: \"⏱ Latency SLO breach — p99 exceeding 2.5s\"\n          description:
+    \"The 99th percentile latency has exceeded the 2.5s SLO target.\"\n\n  - name:
+    rideshare_infra_alerts\n    rules:\n      - alert: HighContainerCPU\n        expr:
+    >\n          sum(rate(container_cpu_usage_seconds_total{name=~\"rideshare.*\"}[5m]))
+    by (name) > 0.8\n        for: 5m\n        labels:\n          severity: warning\n
+    \         team: platform\n        annotations:\n          summary: \"Container
+    {{ $labels.name }} CPU above 80%\"\n\n      - alert: HighContainerMemory\n        expr:
+    >\n          container_memory_usage_bytes{name=~\"rideshare.*\"}\n          /\n
+    \         container_spec_memory_limit_bytes{name=~\"rideshare.*\"} > 0.85\n        for:
+    5m\n        labels:\n          severity: warning\n          team: platform\n        annotations:\n
+    \         summary: \"Container {{ $labels.name }} memory above 85% of limit\"\n\n
+    \     - alert: HostDiskSpaceLow\n        expr: >\n          (node_filesystem_avail_bytes{mountpoint=\"/\"}
+    / node_filesystem_size_bytes{mountpoint=\"/\"}) < 0.15\n        for: 10m\n        labels:\n
+    \         severity: critical\n          team: platform\n        annotations:\n
+    \         summary: \"Host disk space below 15%\"\n\n      - alert: PrometheusTargetMissing\n
+    \       expr: up == 0\n        for: 2m\n        labels:\n          severity: critical\n
+    \         team: platform\n        annotations:\n          summary: \"Target {{
+    $labels.job }} is down\"\n          description: \"{{ $labels.instance }} in job
+    {{ $labels.job }} has been unreachable for > 2 minutes.\"\n"
+  recording.yml: |
+    # Recording rules pre-compute expensive queries for fast dashboards and alerting.
+    # These run on the Prometheus evaluation interval (15s).
+    groups:
+      - name: rideshare_recording_rules
+        interval: 15s
+        rules:
+          # ── HTTP RED metrics (pre-computed) ──
+
+          # Request rate per endpoint (5m window)
+          - record: rideshare:http_requests:rate5m
+            expr: sum(rate(http_requests_total[5m])) by (method, path, code)
+
+          # Overall request rate
+          - record: rideshare:http_requests:rate5m:total
+            expr: sum(rate(http_requests_total[5m]))
+
+          # Error rate (5xx / total)
+          - record: rideshare:http_errors:ratio5m
+            expr: >
+              sum(rate(http_requests_total{code=~"5.."}[5m]))
+              /
+              sum(rate(http_requests_total[5m]))
+
+          # p50 latency
+          - record: rideshare:http_duration:p50
+            expr: histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))
+
+          # p95 latency
+          - record: rideshare:http_duration:p95
+            expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))
+
+          # p99 latency
+          - record: rideshare:http_duration:p99
+            expr: histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))
+
+          # ── Business metrics ──
+
+          # Rides per minute by status
+          - record: rideshare:rides:rate5m
+            expr: sum(rate(rides_total[5m])) by (status)
+
+          # Match duration p95
+          - record: rideshare:match_duration:p95
+            expr: histogram_quantile(0.95, sum(rate(ride_match_duration_seconds_bucket[5m])) by (le))
+
+          # Payment median
+          - record: rideshare:payment:p50
+            expr: histogram_quantile(0.50, sum(rate(payment_amount_usd_bucket[5m])) by (le))
+kind: ConfigMap
+metadata:
+  name: prometheus-rules

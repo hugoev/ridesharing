@@ -1,0 +1,45 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+
+namePrefix: dev-
+
+patches:
+  - patch: |-
+      # Keep replicas low for development, disable HPA enforcement by setting min=max=1
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: gateway
+        namespace: rideshare
+      spec:
+        replicas: 1
+  - patch: |-
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: gateway
+        namespace: rideshare
+      spec:
+        minReplicas: 1
+        maxReplicas: 1
+  - patch: |-
+      # Update ingress host for local dev mapping via /etc/hosts or nip.io
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: kongs-gateway-ingress
+        namespace: rideshare
+      spec:
+        rules:
+          - host: api.dev.rideshare.local
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: gateway
+                      port:
+                        number: 8080

@@ -1,0 +1,157 @@
+# Multi-window, multi-burn-rate SLO alerts.
+# Based on Google SRE Workbook Chapter 5:
+# https://sre.google/workbook/alerting-on-slos/
+#
+# For a 99% availability SLO (1% error budget over 30 days):
+#   Budget = 30d * 24h * 60m * 0.01 = 432 error-minutes
+#
+# Burn rate = how many times faster than normal the budget is being consumed.
+# Alert windows trade off detection time vs. false positive rate.
+
+groups:
+  - name: rideshare_burnrate_alerts
+    rules:
+      # ── Fast burn: page ──
+      # 14.4x burn rate over 1h (uses 2% of 30d budget)
+      # Short window (5m) eliminates false positives from blips
+      - alert: ErrorBudgetBurn_Fast
+        expr: >
+          (
+            sum(rate(http_requests_total{code=~"5.."}[1h]))
+            /
+            sum(rate(http_requests_total[1h]))
+          ) > (14.4 * 0.01)
+          and
+          (
+            sum(rate(http_requests_total{code=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total[5m]))
+          ) > (14.4 * 0.01)
+        for: 2m
+        labels:
+          severity: critical
+          team: backend
+          slo: availability
+        annotations:
+          summary: "🔥 Fast error budget burn — 14.4x rate"
+          description: >
+            Error rate is consuming the 30-day error budget at 14.4x the
+            sustainable rate. At this pace, the entire budget will be
+            exhausted in ~2 days.
+          runbook: "https://wiki.internal/runbooks/error-budget-fast-burn"
+
+      # ── Medium burn: page ──
+      # 6x burn rate over 6h (uses 5% of 30d budget)
+      - alert: ErrorBudgetBurn_Medium
+        expr: >
+          (
+            sum(rate(http_requests_total{code=~"5.."}[6h]))
+            /
+            sum(rate(http_requests_total[6h]))
+          ) > (6 * 0.01)
+          and
+          (
+            sum(rate(http_requests_total{code=~"5.."}[30m]))
+            /
+            sum(rate(http_requests_total[30m]))
+          ) > (6 * 0.01)
+        for: 5m
+        labels:
+          severity: critical
+          team: backend
+          slo: availability
+        annotations:
+          summary: "⚠️ Medium error budget burn — 6x rate"
+          description: >
+            Error rate is consuming the 30-day error budget at 6x the
+            sustainable rate. At this pace, the entire budget will be
+            exhausted in ~5 days.
+          runbook: "https://wiki.internal/runbooks/error-budget-medium-burn"
+
+      # ── Slow burn: ticket ──
+      # 1x burn rate over 3d (uses 10% of 30d budget)
+      - alert: ErrorBudgetBurn_Slow
+        expr: >
+          (
+            sum(rate(http_requests_total{code=~"5.."}[3d]))
+            /
+            sum(rate(http_requests_total[3d]))
+          ) > (1 * 0.01)
+          and
+          (
+            sum(rate(http_requests_total{code=~"5.."}[6h]))
+            /
+            sum(rate(http_requests_total[6h]))
+          ) > (1 * 0.01)
+        for: 30m
+        labels:
+          severity: warning
+          team: backend
+          slo: availability
+        annotations:
+          summary: "📉 Slow error budget burn — 1x rate"
+          description: >
+            Error rate is steadily consuming the 30-day error budget.
+            While not immediately critical, this trend will exhaust the
+            budget if left unaddressed.
+          runbook: "https://wiki.internal/runbooks/error-budget-slow-burn"
+
+      # ── Latency SLO burn rate ──
+      # P99 latency budget: 99% of requests < 2.5s
+      - alert: LatencyBudgetBurn
+        expr: >
+          (
+            1 - histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[1h])) by (le)) / 2.5
+          ) < 0
+        for: 5m
+        labels:
+          severity: warning
+          team: backend
+          slo: latency
+        annotations:
+          summary: "⏱ Latency SLO breach — p99 exceeding 2.5s"
+          description: "The 99th percentile latency has exceeded the 2.5s SLO target."
+
+  - name: rideshare_infra_alerts
+    rules:
+      - alert: HighContainerCPU
+        expr: >
+          sum(rate(container_cpu_usage_seconds_total{name=~"rideshare.*"}[5m])) by (name) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Container {{ $labels.name }} CPU above 80%"
+
+      - alert: HighContainerMemory
+        expr: >
+          container_memory_usage_bytes{name=~"rideshare.*"}
+          /
+          container_spec_memory_limit_bytes{name=~"rideshare.*"} > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Container {{ $labels.name }} memory above 85% of limit"
+
+      - alert: HostDiskSpaceLow
+        expr: >
+          (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.15
+        for: 10m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Host disk space below 15%"
+
+      - alert: PrometheusTargetMissing
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Target {{ $labels.job }} is down"
+          description: "{{ $labels.instance }} in job {{ $labels.job }} has been unreachable for > 2 minutes."

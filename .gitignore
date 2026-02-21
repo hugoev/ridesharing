@@ -1,0 +1,26 @@
+# Binaries
+/rideshare-gateway
+/bin/
+
+# OS specific
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Go
+/vendor/
+/go/pkg/
+*.test
+
+# Local environment
+.env
+
+# Protobuf generated code (optional, some prefer to commit this)
+# /pkg/pb/*.pb.go
+.info.txt

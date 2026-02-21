@@ -1,0 +1,129 @@
+apiVersion: v1
+data:
+  001_create_users.up.sql: |
+    -- Create users table
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+    CREATE TYPE user_role AS ENUM ('rider', 'driver');
+
+    CREATE TABLE IF NOT EXISTS users (
+        id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        email      VARCHAR(255) NOT NULL UNIQUE,
+        password_hash VARCHAR(255) NOT NULL,
+        name       VARCHAR(255) NOT NULL DEFAULT '',
+        phone      VARCHAR(50)  NOT NULL DEFAULT '',
+        role       user_role    NOT NULL DEFAULT 'rider',
+        created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX idx_users_email ON users (email);
+    CREATE INDEX idx_users_role  ON users (role);
+  002_create_drivers.up.sql: |
+    -- Create drivers table
+    CREATE TABLE IF NOT EXISTS drivers (
+        user_id       UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        vehicle_type  VARCHAR(100) NOT NULL DEFAULT '',
+        license_plate VARCHAR(50)  NOT NULL DEFAULT '',
+        is_available  BOOLEAN      NOT NULL DEFAULT false,
+        rating        NUMERIC(3,2) NOT NULL DEFAULT 5.00,
+        created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX idx_drivers_available ON drivers (is_available) WHERE is_available = true;
+  003_create_rides.up.sql: |
+    -- Create rides table
+    CREATE TYPE ride_status AS ENUM ('requested', 'matched', 'enroute', 'completed', 'cancelled');
+
+    CREATE TABLE IF NOT EXISTS rides (
+        id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        rider_id         UUID        NOT NULL REFERENCES users(id),
+        driver_id        UUID                 REFERENCES users(id),
+        pickup_lat       DOUBLE PRECISION NOT NULL,
+        pickup_long      DOUBLE PRECISION NOT NULL,
+        dropoff_lat      DOUBLE PRECISION NOT NULL,
+        dropoff_long     DOUBLE PRECISION NOT NULL,
+        status           ride_status NOT NULL DEFAULT 'requested',
+        fare             NUMERIC(10,2) NOT NULL DEFAULT 0,
+        surge_multiplier NUMERIC(4,2) NOT NULL DEFAULT 1.00,
+        estimated_eta    INTEGER,  -- seconds
+        distance_km      NUMERIC(8,2),
+        started_at       TIMESTAMPTZ,
+        ended_at         TIMESTAMPTZ,
+        created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX idx_rides_status    ON rides (status);
+    CREATE INDEX idx_rides_rider_id  ON rides (rider_id);
+    CREATE INDEX idx_rides_driver_id ON rides (driver_id);
+    CREATE INDEX idx_rides_active    ON rides (status) WHERE status IN ('requested', 'matched', 'enroute');
+  004_create_locations.up.sql: |
+    -- Create locations table with PostGIS support
+    CREATE EXTENSION IF NOT EXISTS postgis;
+
+    CREATE TABLE IF NOT EXISTS locations (
+        id        UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        user_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        geom      GEOMETRY(Point, 4326) NOT NULL,
+        lat       DOUBLE PRECISION NOT NULL,
+        long      DOUBLE PRECISION NOT NULL,
+        timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    -- Spatial index for geospatial queries
+    CREATE INDEX idx_locations_geom    ON locations USING GIST (geom);
+    CREATE INDEX idx_locations_user_id ON locations (user_id);
+    CREATE INDEX idx_locations_time    ON locations (timestamp DESC);
+
+    -- Function to find nearby drivers within a radius (meters)
+    CREATE OR REPLACE FUNCTION find_nearby_drivers(
+        search_lat DOUBLE PRECISION,
+        search_long DOUBLE PRECISION,
+        radius_meters DOUBLE PRECISION DEFAULT 5000
+    )
+    RETURNS TABLE (
+        driver_id UUID,
+        driver_lat DOUBLE PRECISION,
+        driver_long DOUBLE PRECISION,
+        distance_meters DOUBLE PRECISION
+    ) AS $$
+    BEGIN
+        RETURN QUERY
+        SELECT DISTINCT ON (l.user_id)
+            l.user_id,
+            l.lat,
+            l.long,
+            ST_Distance(
+                l.geom::geography,
+                ST_SetSRID(ST_MakePoint(search_long, search_lat), 4326)::geography
+            ) AS distance_meters
+        FROM locations l
+        INNER JOIN drivers d ON d.user_id = l.user_id
+        WHERE d.is_available = true
+          AND ST_DWithin(
+              l.geom::geography,
+              ST_SetSRID(ST_MakePoint(search_long, search_lat), 4326)::geography,
+              radius_meters
+          )
+        ORDER BY l.user_id, l.timestamp DESC, distance_meters ASC;
+    END;
+    $$ LANGUAGE plpgsql;
+  005_create_payments.up.sql: |
+    -- Create payments table
+    CREATE TABLE IF NOT EXISTS payments (
+        id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        ride_id       UUID NOT NULL REFERENCES rides(id),
+        amount        NUMERIC(10,2) NOT NULL,
+        currency      VARCHAR(3)    NOT NULL DEFAULT 'USD',
+        status        VARCHAR(20)   NOT NULL DEFAULT 'pending',
+        stripe_txn_id VARCHAR(255),
+        created_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX idx_payments_ride_id ON payments (ride_id);
+    CREATE INDEX idx_payments_status  ON payments (status);
+kind: ConfigMap
+metadata:
+  name: postgres-migrations

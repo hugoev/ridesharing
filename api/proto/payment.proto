@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package payment;
+option go_package = "github.com/hugovillarreal/ridesharing/pkg/pb;pb";
+
+import "google/protobuf/timestamp.proto";
+
+service PaymentService {
+  rpc ChargeRide (ChargeRideRequest) returns (ChargeRideResponse) {}
+  rpc GetPayment (GetPaymentRequest) returns (GetPaymentResponse) {}
+}
+
+message ChargeRideRequest {
+  string ride_id = 1;
+  double amount = 2;
+  string currency = 3;
+  string payment_method = 4;
+}
+
+message GetPaymentRequest {
+  string ride_id = 1;
+}
+
+message Payment {
+  string id = 1;
+  string ride_id = 2;
+  double amount = 3;
+  string currency = 4;
+  string status = 5; // pending, completed, refunded
+  string stripe_txn_id = 6;
+  google.protobuf.Timestamp created_at = 7;
+}
+
+message ChargeRideResponse {
+  Payment payment = 1;
+}
+
+message GetPaymentResponse {
+  Payment payment = 1;
+}

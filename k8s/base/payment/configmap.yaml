@@ -1,0 +1,16 @@
+# Payment configuration — non-sensitive settings.
+# Secrets are in payment-secrets.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: payment-config
+  namespace: rideshare
+  labels:
+    app.kubernetes.io/name: payment
+data:
+  SERVER_PORT: "8080"
+  LOG_FORMAT: "json"
+  OTEL_ENABLED: "true"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "jaeger:4318"
+  REDIS_ADDR: "redis:6379"
+  KAFKA_BROKERS: "kafka-0.kafka-headless:9092,kafka-1.kafka-headless:9092,kafka-2.kafka-headless:9092"
