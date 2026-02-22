@@ -10,10 +10,14 @@ graph TD
     classDef service fill:#d4e6f1,stroke:#2980b9
     classDef db fill:#d5f5e3,stroke:#27ae60
     classDef obs fill:#fcf3cf,stroke:#f1c40f
+    classDef load fill:#f5cba7,stroke:#e67e22
+
+    %% Clients & Load Testing
+    Client([Mobile/Web Client]) -->|REST / HTTP| Gateway
+    K6[k6-Operator<br/>50 Distributed Workers]:::load -->|1M req/s Load| Gateway
 
     %% Gateway
-    Client([Mobile/Web Client]) -->|REST / HTTP| Gateway[API Gateway :8080<br/>Gin, Rate Limiting, JWT]
-    Gateway:::service
+    Gateway[API Gateway :8080<br/>Gin, Rate Limiting, JWT]:::service
 
     %% Microservices
     subgraph Microservices [gRPC Microservices Platform]
@@ -38,12 +42,17 @@ graph TD
         Payment --> DB
         User --> DB
         
-        Ride --> Redis[(Redis<br/>Locks/Caching)]:::db
+        Gateway --> Redis[(Redis<br/>Locks/Caching)]:::db
+        Ride --> Redis
         Location --> Redis
         
         Ride --> Kafka[(Kafka<br/>Event Streaming)]:::db
-        Location --> Kafka
+        Kafka --- Zookeeper[(Zookeeper)]:::db
     end
+
+    %% Event Flow
+    Kafka -->|Consumed Events| Gateway
+    Gateway -->|WebSocket Push| Client
 
     %% Observability Stack
     subgraph Observability [Google SRE Observability Stack in Kubernetes]
@@ -57,9 +66,11 @@ graph TD
     
     %% Implicit connections
     Gateway -.->|OTLP Traces| Jaeger
-    Ride -.->|JSON Logs| Loki
-    Auth -.->|Scraped by| Prometheus
-
+    Ride -.->|JSON Logs| Promtail[Promtail<br/>DaemonSet]:::obs
+    Promtail -.->|Ships| Loki
+    
+    Microservices -.->|Scraped by| Prometheus
+    NodeExporter[node_exporter<br/>DaemonSet]:::obs -.->|Host Metrics| Prometheus
 ```
 
 ## Quick Start
