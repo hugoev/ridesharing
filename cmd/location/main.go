@@ -48,7 +48,11 @@ func main() {
 	locationSvc := location.NewService(locationRepo, locationCache)
 
 	// ── Initialize gRPC Server ──────────────────────────────────
-	grpcServer := grpc.NewServer()
+	maxMsgSize := 1024 * 1024 * 50 // 50MB
+	grpcServer := grpc.NewServer(
+		grpc.MaxRecvMsgSize(maxMsgSize),
+		grpc.MaxSendMsgSize(maxMsgSize),
+	)
 	locationGrpcServer := location.NewGRPCServer(locationSvc)
 	pb.RegisterLocationServiceServer(grpcServer, locationGrpcServer)
 

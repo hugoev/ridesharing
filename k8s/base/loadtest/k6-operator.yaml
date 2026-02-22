@@ -1,0 +1,20 @@
+# k6-operator — Distributed Load Test Controller
+# Installs the Grafana k6-operator CRDs and controller into the cluster.
+# This enables the TestRun CR which spawns parallel k6 worker pods.
+#
+# Prerequisites: cert-manager must be installed in the cluster.
+# Install: kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.4/cert-manager.yaml
+#
+# The operator itself is installed via:
+#   kubectl apply -f https://github.com/grafana/k6-operator/releases/latest/download/bundle.yaml
+#
+# This file just documents the installation steps. The actual operator
+# is installed by the run-loadtest.sh convenience script.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: k6-operator-system
+  labels:
+    app.kubernetes.io/name: k6-operator
+    app.kubernetes.io/component: loadtest

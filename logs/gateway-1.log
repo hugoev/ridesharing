@@ -1,0 +1,7 @@
+[90m2026-02-21T00:59:37-06:00[0m [32mINF[0m [1mpkg/db/postgres.go:48[0m[36m >[0m [1mconnected to PostgreSQL[0m [36mhost=[0mlocalhost
+[90m2026-02-21T00:59:37-06:00[0m [32mINF[0m [1mpkg/redis/redis.go:26[0m[36m >[0m [1mconnected to Redis[0m [36maddr=[0mlocalhost:6379
+[90m2026-02-21T00:59:37-06:00[0m [32mINF[0m [1mcmd/gateway/main.go:188[0m[36m >[0m [1mStarting API Gateway (BFF) server[0m [36mport=[0m9001
+[90m2026-02-21T01:00:20-06:00[0m [32mINF[0m [1mcmd/gateway/main.go:262[0m[36m >[0m [1mHTTP Request[0m [36mip=[0m::1 [36mlatency=[0m34.722542 [36mmethod=[0mGET [36mpath=[0m/health [36mstatus=[0m200
+[90m2026-02-21T10:38:29-06:00[0m [32mINF[0m [1mcmd/gateway/main.go:198[0m[36m >[0m [1mshutting down server...[0m
+[90m2026-02-21T10:38:29-06:00[0m [32mINF[0m [1mcmd/gateway/main.go:209[0m[36m >[0m [1mserver exited gracefully[0m
+[90m2026-02-21T10:38:30-06:00[0m [31mERR[0m [1mpkg/kafka/kafka.go:74[0m[36m >[0m [1mkafka read error[0m [36merror=[0m[31m[1m"fetching message: EOF"[0m[0m [36mtopic=[0mride-events

@@ -4,37 +4,74 @@ Enterprise ride-sharing backend built with Go, PostgreSQL, Redis, and Kafka.
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    API Gateway (BFF) (:8080)                    │
-│  Gin │ JWT Auth │ Rate Limiting │ OpenTelemetry │ Prometheus  │
-└─────────────────────────────────┬───────────────────────────────┘
-                                  │ (gRPC over TCP)
-┌─────────────────────────────────▼───────────────────────────────┐
-│  Auth   │  Rides   │  Users  │  Locations  │  Payments  │  WS │
-│ (gRPC)  │ (gRPC)   │ (gRPC)  │   (gRPC)    │   (gRPC)   │     │
-├─────────────────────────────────────────────────────────────────┤
-│      CockroachDB (PostgreSQL)   │  Redis  │  Kafka HA           │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-         ┌────────────────────┼───────────────────┐
-         ▼                    ▼                   ▼
-    Prometheus           Jaeger              Loki
-    Alertmanager         (Traces)            Promtail
-    node_exporter                            (Logs)
-         └────────────────────┼───────────────────┘
-                              ▼
-                          Grafana
+```mermaid
+graph TD
+    classDef infra fill:#f5f5f5,stroke:#999
+    classDef service fill:#d4e6f1,stroke:#2980b9
+    classDef db fill:#d5f5e3,stroke:#27ae60
+    classDef obs fill:#fcf3cf,stroke:#f1c40f
+
+    %% Gateway
+    Client([Mobile/Web Client]) -->|REST / HTTP| Gateway[API Gateway :8080<br/>Gin, Rate Limiting, JWT]
+    Gateway:::service
+
+    %% Microservices
+    subgraph Microservices [gRPC Microservices Platform]
+        Auth[Auth Service<br/>Registration, Login]:::service
+        Ride[Ride Service<br/>Matching, Surge Pricing]:::service
+        Location[Location Service<br/>PostGIS Nearby Drivers]:::service
+        Payment[Payment Service<br/>Stripe Subscriptions]:::service
+        User[User Service<br/>Driver Profiles]:::service
+    end
+
+    Gateway -->|gRPC| Auth
+    Gateway -->|gRPC| Ride
+    Gateway -->|gRPC| Location
+    Gateway -->|gRPC| Payment
+    Gateway -->|gRPC| User
+
+    %% Data Plane
+    subgraph DataPlane [Distributed Data Plane]
+        Auth --> DB[(CockroachDB<br/>Distributed SQL)]:::db
+        Ride --> DB
+        Location --> DB
+        Payment --> DB
+        User --> DB
+        
+        Ride --> Redis[(Redis<br/>Locks/Caching)]:::db
+        Location --> Redis
+        
+        Ride --> Kafka[(Kafka<br/>Event Streaming)]:::db
+        Location --> Kafka
+    end
+
+    %% Observability Stack
+    subgraph Observability [Google SRE Observability Stack in Kubernetes]
+        direction LR
+        Grafana[Grafana<br/>Dashboards]:::obs --> Prometheus[Prometheus<br/>Metrics Scraper]:::obs
+        Grafana --> Loki[Loki<br/>JSON Log Aggregation]:::obs
+        Grafana --> Jaeger[Jaeger<br/>Distributed Traces]:::obs
+        
+        Prometheus --> Alertmanager[Alertmanager<br/>Burn Rate Alerts]:::obs
+    end
+    
+    %% Implicit connections
+    Gateway -.->|OTLP Traces| Jaeger
+    Ride -.->|JSON Logs| Loki
+    Auth -.->|Scraped by| Prometheus
+
 ```
 
 ## Quick Start
 
 ```bash
-# Start everything (gateway + infra + monitoring)
-docker compose up -d --build
+# 1. Deploy the entire microservices stack locally to a Kubernetes (Kind) cluster
+./scripts/deploy-cluster.sh
 
-# Verify
-docker compose ps          # All services should be "healthy"
+# 2. Forward the API Gateway port to your local machine
+kubectl port-forward -n rideshare service/gateway 8080:8080 &
+
+# 3. Verify it's running
 curl http://localhost:8080/health
 ```
 
@@ -135,14 +172,7 @@ GET /v1/ws?token=<jwt>   — Real-time ride events
 ## Project Structure
 
 ```
-├── api/proto/            — gRPC Protocol Buffer contracts (.proto)
-├── cmd/
-│   ├── gateway/          — API Gateway (BFF)
-│   ├── auth/             — Auth gRPC Microservice
-│   ├── location/         — Location gRPC Microservice
-│   ├── payment/          — Payment gRPC Microservice
-│   ├── ride/             — Ride gRPC Microservice
-│   └── user/             — User gRPC Microservice
+├── cmd/gateway/          — Application entry point
 ├── internal/
 │   ├── auth/             — Registration, login, JWT refresh
 │   ├── ride/             — Ride lifecycle, matching, surge pricing
@@ -199,36 +229,33 @@ SLO thresholds: p95 < 500ms, p99 < 1.5s, error rate < 5%.
 
 ## Development
 
+We use a local Kubernetes cluster (Kind) to replicate production locally.
+
 ```bash
-# Run locally (without Docker for gateway)
-docker compose up -d postgres redis kafka zookeeper
+# Deploy the cluster and all microservices
+./scripts/deploy-cluster.sh
 
-# You must build and run each microservice and the gateway separately or via K8s
-go run ./cmd/auth &
-go run ./cmd/user &
-go run ./cmd/ride &
-go run ./cmd/location &
-go run ./cmd/payment &
-go run ./cmd/gateway &
+# Forward ports to access observability stack locally
+kubectl port-forward -n rideshare service/grafana 3000:3000 &
+kubectl port-forward -n rideshare service/jaeger 16686:16686 &
+kubectl port-forward -n rideshare service/prometheus 9090:9090 &
 
-# Run tests
+# Run distributed k6 load test (1M req/s simulation inside the cluster)
+./scripts/run-loadtest.sh
+
+# Run load test locally (from your laptop)
+./scripts/run-loadtest.sh --local
+
+# Run unit tests
 go test ./... -count=1
-
-# Build
-go build -o bin/gateway ./cmd/gateway
 ```
 
 ## Configuration
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SERVER_PORT` | 8080 | HTTP listen port |
-| `AUTH_SERVICE_ADDR` | localhost:50051 | Auth gRPC address |
-| `USER_SERVICE_ADDR` | localhost:50052 | User gRPC address |
-| `RIDE_SERVICE_ADDR` | localhost:50053 | Ride gRPC address |
-| `LOCATION_SERVICE_ADDR` | localhost:50054 | Location gRPC address |
-| `PAYMENT_SERVICE_ADDR` | localhost:50055 | Payment gRPC address |
-| `DATABASE_URL` | — | PostgreSQL connection string |
+| `SERVER_PORT` | 8080 | HTTP or gRPC listen port |
+| `DATABASE_URL` | — | CockroachDB connection string |
 | `REDIS_ADDR` | localhost:6379 | Redis address |
 | `KAFKA_BROKERS` | localhost:9092 | Kafka broker addresses |
 | `JWT_SECRET` | — | JWT signing secret |

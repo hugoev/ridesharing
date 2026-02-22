@@ -39,7 +39,11 @@ func main() {
 	authSvc := auth.NewService(authRepo, pool, cfg.JWTSecret, cfg.JWTExpiration)
 
 	// ── Initialize gRPC Server ──────────────────────────────────
-	grpcServer := grpc.NewServer()
+	maxMsgSize := 1024 * 1024 * 50 // 50MB
+	grpcServer := grpc.NewServer(
+		grpc.MaxRecvMsgSize(maxMsgSize),
+		grpc.MaxSendMsgSize(maxMsgSize),
+	)
 	authGrpcServer := auth.NewGRPCServer(authSvc)
 	pb.RegisterAuthServiceServer(grpcServer, authGrpcServer)
 

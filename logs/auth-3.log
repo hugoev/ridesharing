@@ -1,0 +1,4 @@
+[90m2026-02-21T00:59:34-06:00[0m [32mINF[0m [1mpkg/db/postgres.go:48[0m[36m >[0m [1mconnected to PostgreSQL[0m [36mhost=[0mlocalhost
+[90m2026-02-21T00:59:34-06:00[0m [32mINF[0m [1mcmd/auth/main.go:58[0m[36m >[0m [1mStarting Auth gRPC microservice[0m [36mport=[0m50053
+[90m2026-02-21T10:38:29-06:00[0m [32mINF[0m [1mcmd/auth/main.go:68[0m[36m >[0m [1mshutting down Auth gRPC server...[0m
+[90m2026-02-21T10:38:30-06:00[0m [32mINF[0m [1mcmd/auth/main.go:71[0m[36m >[0m [1mAuth gRPC server exited gracefully[0m

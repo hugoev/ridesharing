@@ -1,6 +1,5 @@
 # HPA scales gateway pods based on CPU and memory utilization.
-# In production, add custom metrics (e.g., requests_per_second) via
-# Prometheus Adapter for more accurate scaling signals.
+# Tuned for extreme load testing — allows aggressive scale-up to 50 replicas.
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -14,32 +13,36 @@ spec:
     kind: Deployment
     name: gateway
   minReplicas: 2
-  maxReplicas: 10
+  maxReplicas: 50
   behavior:
-    # Scale up aggressively for traffic spikes
+    # Scale up very aggressively for traffic spikes
     scaleUp:
-      stabilizationWindowSeconds: 30
+      stabilizationWindowSeconds: 0       # React immediately
       policies:
+        - type: Percent
+          value: 100                      # Double pods every 15s
+          periodSeconds: 15
         - type: Pods
-          value: 4
-          periodSeconds: 60
+          value: 10                       # Or add 10 pods per 15s
+          periodSeconds: 15
+      selectPolicy: Max                   # Use whichever adds more pods
     # Scale down conservatively to avoid flapping
     scaleDown:
       stabilizationWindowSeconds: 300
       policies:
         - type: Pods
-          value: 1
-          periodSeconds: 120
+          value: 2
+          periodSeconds: 60
   metrics:
     - type: Resource
       resource:
         name: cpu
         target:
           type: Utilization
-          averageUtilization: 70
+          averageUtilization: 60          # Trigger at 60% (was 70%)
     - type: Resource
       resource:
         name: memory
         target:
           type: Utilization
-          averageUtilization: 80
+          averageUtilization: 75          # Trigger at 75% (was 80%)

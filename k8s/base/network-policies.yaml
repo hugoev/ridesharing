@@ -53,11 +53,16 @@ spec:
   policyTypes:
     - Ingress
   ingress:
-    # From Gateway
+    # From API microservices and init job
     - from:
         - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/component
+                operator: In
+                values: ["api"]
+        - podSelector:
             matchLabels:
-              app.kubernetes.io/name: gateway
+              app.kubernetes.io/name: cockroachdb-init
       ports:
         - port: 26257
     # From other CockroachDB nodes (clustering)

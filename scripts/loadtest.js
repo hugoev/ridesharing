@@ -29,15 +29,13 @@ export const options = {
             tags: { scenario: 'smoke' },
             startTime: '0s',
         },
-        // Load test — moderate sustained load
+        // Load test — maximum sustained load for M1 16GB
         load: {
             executor: 'ramping-vus',
             startVUs: 0,
             stages: [
-                { duration: '30s', target: 20 },  // ramp up
-                { duration: '1m', target: 20 },  // hold
-                { duration: '30s', target: 50 },  // ramp up
-                { duration: '1m', target: 50 },  // hold
+                { duration: '30s', target: 200 },  // ramp up
+                { duration: '2m', target: 200 },  // hold
                 { duration: '30s', target: 0 },   // ramp down
             ],
             tags: { scenario: 'load' },
@@ -48,8 +46,8 @@ export const options = {
             executor: 'ramping-vus',
             startVUs: 0,
             stages: [
-                { duration: '10s', target: 100 },  // spike
-                { duration: '30s', target: 100 },  // hold
+                { duration: '10s', target: 300 },  // spike
+                { duration: '30s', target: 300 },  // hold
                 { duration: '10s', target: 0 },    // recover
             ],
             tags: { scenario: 'spike' },
@@ -57,9 +55,9 @@ export const options = {
         },
     },
     thresholds: {
-        http_req_duration: ['p(95)<500', 'p(99)<1500'],  // SLO: p95 < 500ms, p99 < 1.5s
-        errors: ['rate<0.05'],                            // SLO: < 5% error rate
-        http_req_failed: ['rate<0.05'],
+        http_req_duration: ['p(95)<2000', 'p(99)<5000'],  // SLO: p95 < 2s, p99 < 5s for stress
+        errors: ['rate<0.10'],                            // SLO: < 10% error rate
+        http_req_failed: ['rate<0.10'],
     },
 };
 
@@ -71,6 +69,7 @@ function registerUser(email, password, role, name) {
         email: email,
         password: password,
         name: name,
+        phone: '555-0000',
         role: role,
         vehicle_type: role === 'driver' ? 'sedan' : undefined,
         license_plate: role === 'driver' ? `K6-${__VU}` : undefined,

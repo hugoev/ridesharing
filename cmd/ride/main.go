@@ -62,7 +62,11 @@ func main() {
 	rideSvc := ride.NewService(rideRepo, pool, locationClientAdapter, rideProducer, rdb)
 
 	// ── Initialize gRPC Server ──────────────────────────────────
-	grpcServer := grpc.NewServer()
+	maxMsgSize := 1024 * 1024 * 50 // 50MB
+	grpcServer := grpc.NewServer(
+		grpc.MaxRecvMsgSize(maxMsgSize),
+		grpc.MaxSendMsgSize(maxMsgSize),
+	)
 	rideGrpcServer := ride.NewGRPCServer(rideSvc)
 	pb.RegisterRideServiceServer(grpcServer, rideGrpcServer)
 

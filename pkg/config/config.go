@@ -58,8 +58,8 @@ func Load() *Config {
 		JWTSecret:     getEnv("JWT_SECRET", "rideshare-dev-secret-change-in-prod"),
 		JWTExpiration: getEnvDuration("JWT_EXPIRATION", 24*time.Hour),
 
-		RateLimit: getEnvFloat("RATE_LIMIT", 100),
-		RateBurst: getEnvInt("RATE_BURST", 200),
+		RateLimit: getEnvFloat("RATE_LIMIT", 5000),
+		RateBurst: getEnvInt("RATE_BURST", 10000),
 
 		EnableEdgeProxy: getEnvBool("ENABLE_EDGE_PROXY", false),
 

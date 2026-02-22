@@ -1,0 +1,29 @@
+# Kind cluster configuration for RideShare microservices.
+# Multi-node setup: 1 control-plane + 3 workers for realistic HPA scaling.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: rideshare
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+      # API Gateway HTTP
+      - containerPort: 30080
+        hostPort: 8080
+        protocol: TCP
+      # Grafana
+      - containerPort: 30030
+        hostPort: 3000
+        protocol: TCP
+      # Prometheus
+      - containerPort: 30090
+        hostPort: 9090
+        protocol: TCP
+  - role: worker
+  - role: worker
+  - role: worker

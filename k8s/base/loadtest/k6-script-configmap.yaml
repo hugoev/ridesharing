@@ -1,0 +1,101 @@
+# ConfigMap containing the k6 load test script.
+# This is mounted into every k6 worker pod spawned by the k6-operator.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: k6-loadtest-script
+  namespace: rideshare
+  labels:
+    app.kubernetes.io/name: k6-loadtest
+    app.kubernetes.io/component: loadtest
+data:
+  loadtest-1m.js: |
+    // ═══════════════════════════════════════════════════════════
+    // This script is injected into k6 pods via ConfigMap.
+    // See scripts/loadtest-1m.js for the full annotated version.
+    // ═══════════════════════════════════════════════════════════
+    import { check } from 'k6';
+    import http from 'k6/http';
+    import { Rate, Trend, Counter } from 'k6/metrics';
+
+    const errorRate = new Rate('error_rate');
+    const reqDuration = new Trend('req_duration', true);
+    const totalRequests = new Counter('total_requests');
+
+    export const options = {
+      scenarios: {
+        warmup: {
+          executor: 'constant-arrival-rate',
+          rate: 1000,
+          timeUnit: '1s',
+          duration: '30s',
+          preAllocatedVUs: 200,
+          maxVUs: 500,
+          startTime: '0s',
+        },
+        ramp: {
+          executor: 'ramping-arrival-rate',
+          startRate: 1000,
+          timeUnit: '1s',
+          stages: [
+            { duration: '30s', target: 10000 },
+            { duration: '30s', target: 20000 },
+          ],
+          preAllocatedVUs: 2000,
+          maxVUs: 5000,
+          startTime: '30s',
+        },
+        sustained: {
+          executor: 'constant-arrival-rate',
+          rate: 20000,
+          timeUnit: '1s',
+          duration: '3m',
+          preAllocatedVUs: 5000,
+          maxVUs: 10000,
+          startTime: '1m30s',
+        },
+        cooldown: {
+          executor: 'ramping-arrival-rate',
+          startRate: 20000,
+          timeUnit: '1s',
+          stages: [
+            { duration: '30s', target: 5000 },
+            { duration: '30s', target: 0 },
+          ],
+          preAllocatedVUs: 2000,
+          maxVUs: 5000,
+          startTime: '4m30s',
+        },
+      },
+      thresholds: {
+        http_req_duration: ['p(95)<1000', 'p(99)<3000'],
+        error_rate: ['rate<0.05'],
+      },
+      insecureSkipTLSVerify: true,
+    };
+
+    const BASE_URL = __ENV.BASE_URL || 'http://gateway.rideshare.svc.cluster.local:8080';
+    const TEST_TOKEN = __ENV.TEST_TOKEN || 'test-bearer-token';
+
+    function auth() {
+      return { headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TEST_TOKEN}` } };
+    }
+
+    const fns = [
+      () => http.get(`${BASE_URL}/health`),
+      () => http.get(`${BASE_URL}/v1/locations/nearby?lat=${29.42 + Math.random()*0.1}&long=${-98.49 + Math.random()*0.1}&radius=10`, auth()),
+      () => http.get(`${BASE_URL}/v1/rides/${crypto.randomUUID ? crypto.randomUUID() : '00000000-0000-0000-0000-000000000000'}`, auth()),
+      () => http.post(`${BASE_URL}/v1/locations/update`, JSON.stringify({ lat: 29.42+Math.random()*0.05, long: -98.49+Math.random()*0.05 }), auth()),
+      () => http.post(`${BASE_URL}/v1/auth/login`, JSON.stringify({ email: `load-${__VU}@k6.io`, password: 'test123' }), { headers: { 'Content-Type': 'application/json' } }),
+    ];
+    const weights = [10, 35, 25, 20, 10];
+    const pool = [];
+    weights.forEach((w, i) => { for (let j = 0; j < w; j++) pool.push(fns[i]); });
+
+    export default function () {
+      totalRequests.add(1);
+      const res = pool[Math.floor(Math.random() * pool.length)]();
+      reqDuration.add(res.timings.duration);
+      const ok = check(res, { 'status ok': (r) => r.status < 500 });
+      errorRate.add(!ok);
+    }

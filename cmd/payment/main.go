@@ -39,7 +39,11 @@ func main() {
 	paymentSvc := payment.NewService(paymentRepo)
 
 	// ── Initialize gRPC Server ──────────────────────────────────
-	grpcServer := grpc.NewServer()
+	maxMsgSize := 1024 * 1024 * 50 // 50MB
+	grpcServer := grpc.NewServer(
+		grpc.MaxRecvMsgSize(maxMsgSize),
+		grpc.MaxSendMsgSize(maxMsgSize),
+	)
 	paymentGrpcServer := payment.NewGRPCServer(paymentSvc)
 	pb.RegisterPaymentServiceServer(grpcServer, paymentGrpcServer)
 

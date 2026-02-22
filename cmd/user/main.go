@@ -39,7 +39,11 @@ func main() {
 	userSvc := user.NewService(userRepo)
 
 	// ── Initialize gRPC Server ──────────────────────────────────
-	grpcServer := grpc.NewServer()
+	maxMsgSize := 1024 * 1024 * 50 // 50MB
+	grpcServer := grpc.NewServer(
+		grpc.MaxRecvMsgSize(maxMsgSize),
+		grpc.MaxSendMsgSize(maxMsgSize),
+	)
 	userGrpcServer := user.NewGRPCServer(userSvc)
 	pb.RegisterUserServiceServer(grpcServer, userGrpcServer)
 

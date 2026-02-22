@@ -90,8 +90,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
-          cpus: "0.50"
+          memory: 512M
+          cpus: "1.00"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
       interval: 10s

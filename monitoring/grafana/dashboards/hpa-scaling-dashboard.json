@@ -1,0 +1,278 @@
+{
+    "annotations": {
+        "list": []
+    },
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 1,
+    "id": null,
+    "links": [],
+    "liveNow": true,
+    "panels": [
+        {
+            "title": "🔥 Total Requests/sec (All Services)",
+            "type": "timeseries",
+            "gridPos": {
+                "h": 8,
+                "w": 24,
+                "x": 0,
+                "y": 0
+            },
+            "targets": [
+                {
+                    "expr": "sum(rate(http_requests_total{namespace=\"rideshare\"}[30s]))",
+                    "legendFormat": "Total RPS"
+                },
+                {
+                    "expr": "sum(rate(http_requests_total{namespace=\"rideshare\", app=\"gateway\"}[30s]))",
+                    "legendFormat": "Gateway RPS"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "fillOpacity": 20,
+                        "lineWidth": 2
+                    },
+                    "unit": "reqps"
+                }
+            }
+        },
+        {
+            "title": "📦 Pod Replica Count (HPA Scaling Curve)",
+            "type": "timeseries",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 8
+            },
+            "targets": [
+                {
+                    "expr": "kube_deployment_status_replicas{namespace=\"rideshare\", deployment=\"gateway\"}",
+                    "legendFormat": "Gateway"
+                },
+                {
+                    "expr": "kube_deployment_status_replicas{namespace=\"rideshare\", deployment=\"auth\"}",
+                    "legendFormat": "Auth"
+                },
+                {
+                    "expr": "kube_deployment_status_replicas{namespace=\"rideshare\", deployment=\"user\"}",
+                    "legendFormat": "User"
+                },
+                {
+                    "expr": "kube_deployment_status_replicas{namespace=\"rideshare\", deployment=\"ride\"}",
+                    "legendFormat": "Ride"
+                },
+                {
+                    "expr": "kube_deployment_status_replicas{namespace=\"rideshare\", deployment=\"location\"}",
+                    "legendFormat": "Location"
+                },
+                {
+                    "expr": "kube_deployment_status_replicas{namespace=\"rideshare\", deployment=\"payment\"}",
+                    "legendFormat": "Payment"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "fillOpacity": 10,
+                        "lineWidth": 2,
+                        "stacking": {
+                            "mode": "none"
+                        }
+                    },
+                    "unit": "short",
+                    "min": 0
+                }
+            }
+        },
+        {
+            "title": "⚡ Response Latency (p50 / p95 / p99)",
+            "type": "timeseries",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 8
+            },
+            "targets": [
+                {
+                    "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{namespace=\"rideshare\", app=\"gateway\"}[30s])) by (le))",
+                    "legendFormat": "p50"
+                },
+                {
+                    "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{namespace=\"rideshare\", app=\"gateway\"}[30s])) by (le))",
+                    "legendFormat": "p95"
+                },
+                {
+                    "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{namespace=\"rideshare\", app=\"gateway\"}[30s])) by (le))",
+                    "legendFormat": "p99"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "fillOpacity": 10,
+                        "lineWidth": 2
+                    },
+                    "unit": "s"
+                }
+            }
+        },
+        {
+            "title": "🖥️ CPU Utilization by Service",
+            "type": "timeseries",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 16
+            },
+            "targets": [
+                {
+                    "expr": "avg(rate(container_cpu_usage_seconds_total{namespace=\"rideshare\", container!=\"\", container!=\"POD\"}[1m])) by (container) * 100",
+                    "legendFormat": "{{container}}"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "fillOpacity": 15,
+                        "lineWidth": 2
+                    },
+                    "unit": "percent",
+                    "min": 0,
+                    "max": 100
+                }
+            }
+        },
+        {
+            "title": "💾 Memory Usage by Service",
+            "type": "timeseries",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 16
+            },
+            "targets": [
+                {
+                    "expr": "avg(container_memory_working_set_bytes{namespace=\"rideshare\", container!=\"\", container!=\"POD\"}) by (container)",
+                    "legendFormat": "{{container}}"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "fillOpacity": 15,
+                        "lineWidth": 2
+                    },
+                    "unit": "bytes"
+                }
+            }
+        },
+        {
+            "title": "❌ Error Rate",
+            "type": "stat",
+            "gridPos": {
+                "h": 4,
+                "w": 8,
+                "x": 0,
+                "y": 24
+            },
+            "targets": [
+                {
+                    "expr": "sum(rate(http_requests_total{namespace=\"rideshare\", status=~\"5..\"}[1m])) / sum(rate(http_requests_total{namespace=\"rideshare\"}[1m])) * 100",
+                    "legendFormat": "Error %"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "percent",
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "yellow",
+                                "value": 1
+                            },
+                            {
+                                "color": "red",
+                                "value": 5
+                            }
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "title": "🎯 HPA Target Utilization vs Actual",
+            "type": "timeseries",
+            "gridPos": {
+                "h": 4,
+                "w": 16,
+                "x": 8,
+                "y": 24
+            },
+            "targets": [
+                {
+                    "expr": "kube_horizontalpodautoscaler_spec_target_metric{namespace=\"rideshare\", horizontalpodautoscaler=\"gateway\"}",
+                    "legendFormat": "HPA Target"
+                },
+                {
+                    "expr": "kube_horizontalpodautoscaler_status_current_metrics_average_utilization{namespace=\"rideshare\", horizontalpodautoscaler=\"gateway\"}",
+                    "legendFormat": "HPA Actual"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "unit": "percent"
+                }
+            }
+        }
+    ],
+    "refresh": "5s",
+    "schemaVersion": 39,
+    "style": "dark",
+    "tags": [
+        "rideshare",
+        "loadtest",
+        "hpa",
+        "scaling"
+    ],
+    "templating": {
+        "list": []
+    },
+    "time": {
+        "from": "now-15m",
+        "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "browser",
+    "title": "RideShare — HPA Scaling Dashboard (1M req/s)",
+    "uid": "rideshare-hpa-scaling",
+    "version": 1
+}

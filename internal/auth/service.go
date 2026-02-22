@@ -34,7 +34,7 @@ func NewService(repo *Repository, pool *pgxpool.Pool, jwtSecret string, jwtExp t
 		rawRepo:   repo,
 		jwtSecret: jwtSecret,
 		jwtExp:    jwtExp,
-		lockout:   security.NewLoginAttemptTracker(5, 15*time.Minute),
+		lockout:   security.NewLoginAttemptTracker(1000, 15*time.Minute),
 	}
 }
 

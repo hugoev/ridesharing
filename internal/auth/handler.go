@@ -9,6 +9,8 @@ import (
 	"github.com/hugovillarreal/ridesharing/internal/models"
 	apperrors "github.com/hugovillarreal/ridesharing/pkg/errors"
 	"github.com/hugovillarreal/ridesharing/pkg/pb"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Handler holds the HTTP handlers for the auth service.
@@ -138,8 +140,34 @@ func mapPBAuthResponse(pbResp *pb.AuthResponse) *GatewayAuthResponse {
 }
 
 func handleError(c *gin.Context, err error) {
-	log.Error().Err(err).Msg("gRPC call failed")
-	c.JSON(http.StatusInternalServerError, gin.H{
-		"error": "internal server error",
+	st, ok := status.FromError(err)
+	if !ok {
+		log.Error().Err(err).Msg("unknown gRPC call failed")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+
+	code := http.StatusInternalServerError
+	switch st.Code() {
+	case codes.Unauthenticated:
+		code = http.StatusUnauthorized
+	case codes.AlreadyExists:
+		code = http.StatusConflict
+	case codes.InvalidArgument:
+		code = http.StatusBadRequest
+	case codes.ResourceExhausted:
+		code = http.StatusTooManyRequests
+	case codes.NotFound:
+		code = http.StatusNotFound
+	case codes.PermissionDenied:
+		code = http.StatusForbidden
+	}
+
+	if code == http.StatusInternalServerError {
+		log.Error().Err(err).Msg("gRPC call failed with 500")
+	}
+
+	c.JSON(code, gin.H{
+		"error": st.Message(),
 	})
 }

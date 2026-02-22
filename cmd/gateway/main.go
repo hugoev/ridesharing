@@ -56,17 +56,33 @@ func main() {
 	}
 	defer cancel()
 
-	// ── Connect to PostgreSQL (For Healthcheck only) ───────────
-	pool, err := db.NewPool(ctx, cfg.DatabaseURL)
+	// ── Connect to PostgreSQL (with retry for K8s startup ordering) ──
+	var pool *pgxpool.Pool
+	for i := 0; i < 30; i++ {
+		pool, err = db.NewPool(ctx, cfg.DatabaseURL)
+		if err == nil {
+			break
+		}
+		log.Warn().Err(err).Int("attempt", i+1).Msg("waiting for database...")
+		time.Sleep(2 * time.Second)
+	}
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to connect to database")
+		log.Fatal().Err(err).Msg("failed to connect to database after 30 retries")
 	}
 	defer pool.Close()
 
-	// ── Connect to Redis (For Healthcheck only) ─────────────────
-	rdb, err := redisclient.NewClient(ctx, cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
+	// ── Connect to Redis (with retry for K8s startup ordering) ───
+	var rdb *redis.Client
+	for i := 0; i < 30; i++ {
+		rdb, err = redisclient.NewClient(ctx, cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
+		if err == nil {
+			break
+		}
+		log.Warn().Err(err).Int("attempt", i+1).Msg("waiting for redis...")
+		time.Sleep(2 * time.Second)
+	}
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to connect to redis")
+		log.Fatal().Err(err).Msg("failed to connect to redis after 30 retries")
 	}
 	defer rdb.Close()
 

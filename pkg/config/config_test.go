@@ -18,11 +18,11 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.RedisDB != 0 {
 		t.Errorf("RedisDB = %d, want 0", cfg.RedisDB)
 	}
-	if cfg.RateLimit != 100 {
-		t.Errorf("RateLimit = %v, want 100", cfg.RateLimit)
+	if cfg.RateLimit != 5000 {
+		t.Errorf("RateLimit = %v, want 5000", cfg.RateLimit)
 	}
-	if cfg.RateBurst != 200 {
-		t.Errorf("RateBurst = %d, want 200", cfg.RateBurst)
+	if cfg.RateBurst != 10000 {
+		t.Errorf("RateBurst = %d, want 10000", cfg.RateBurst)
 	}
 	if cfg.JWTExpiration != 24*time.Hour {
 		t.Errorf("JWTExpiration = %v, want 24h", cfg.JWTExpiration)
@@ -75,8 +75,8 @@ func TestLoad_InvalidEnvFallsBackToDefault(t *testing.T) {
 	if cfg.RedisDB != 0 {
 		t.Errorf("RedisDB = %d, want 0 (fallback)", cfg.RedisDB)
 	}
-	if cfg.RateLimit != 100 {
-		t.Errorf("RateLimit = %v, want 100 (fallback)", cfg.RateLimit)
+	if cfg.RateLimit != 5000 {
+		t.Errorf("RateLimit = %v, want 5000 (fallback)", cfg.RateLimit)
 	}
 	if cfg.JWTExpiration != 24*time.Hour {
 		t.Errorf("JWTExpiration = %v, want 24h (fallback)", cfg.JWTExpiration)

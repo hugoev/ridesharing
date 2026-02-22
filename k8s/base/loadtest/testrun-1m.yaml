@@ -1,0 +1,56 @@
+# TestRun — 1M req/s Distributed Load Test
+#
+# This CustomResource tells the k6-operator to spawn 50 parallel
+# k6 worker pods, each running the loadtest-1m.js script.
+#
+# 50 pods × 20,000 req/s each = 1,000,000 req/s sustained.
+#
+# Usage:
+#   kubectl apply -f k8s/base/loadtest/k6-script-configmap.yaml
+#   kubectl apply -f k8s/base/loadtest/testrun-1m.yaml
+#
+# Monitor:
+#   kubectl get testrun -n rideshare -w
+#   kubectl get pods -n rideshare -l k6_cr=loadtest-1m -w
+#   kubectl get hpa -n rideshare -w
+---
+apiVersion: k6.io/v1alpha1
+kind: TestRun
+metadata:
+  name: loadtest-1m
+  namespace: rideshare
+  labels:
+    app.kubernetes.io/name: k6-loadtest
+    app.kubernetes.io/component: loadtest
+spec:
+  parallelism: 50
+  script:
+    configMap:
+      name: k6-loadtest-script
+      file: loadtest-1m.js
+  runner:
+    # Resource allocation per k6 worker pod
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "2"
+        memory: "2Gi"
+    # Environment variables injected into each k6 pod
+    env:
+      - name: BASE_URL
+        value: "http://gateway.rideshare.svc.cluster.local:8080"
+      - name: TEST_TOKEN
+        value: "test-bearer-token"
+    # Node affinity — prefer dedicated load-test nodes if available
+    affinity:
+      nodeAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+                - key: workload-type
+                  operator: In
+                  values:
+                    - loadtest

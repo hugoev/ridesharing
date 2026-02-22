@@ -76,7 +76,7 @@ metadata:
     app.kubernetes.io/component: database
 spec:
   serviceName: "cockroachdb"
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: cockroachdb
@@ -138,7 +138,7 @@ spec:
           command:
             - "/bin/bash"
             - "-ecx"
-            - "exec /cockroach/cockroach start --logtostderr --insecure --advertise-host $(hostname -f) --http-addr 0.0.0.0 --join cockroachdb-0.cockroachdb,cockroachdb-1.cockroachdb,cockroachdb-2.cockroachdb --cache 25% --max-sql-memory 25%"
+            - "exec /cockroach/cockroach start-single-node --logtostderr --insecure --advertise-host $(hostname -f) --listen-addr 0.0.0.0:26257 --http-addr 0.0.0.0:8080 --cache 25% --max-sql-memory 25%"
       volumes:
         - name: datadir
           persistentVolumeClaim:
@@ -168,13 +168,6 @@ spec:
         app.kubernetes.io/name: cockroachdb-init
     spec:
       containers:
-        - name: cluster-init
-          image: cockroachdb/cockroach:v23.2.3
-          command:
-            - "/cockroach/cockroach"
-            - "init"
-            - "--insecure"
-            - "--host=cockroachdb-0.cockroachdb"
         - name: setup-database
           image: postgres:16-alpine
           command: ["/bin/sh", "-c"]
@@ -185,6 +178,7 @@ spec:
               echo "Creating user and databases..."
               # Create user and database
               psql -h cockroachdb-public -p 26257 -U root -c "CREATE USER IF NOT EXISTS rideshare;"
+              psql -h cockroachdb-public -p 26257 -U root -c "ALTER USER rideshare WITH PASSWORD 'rideshare_secret';"
               psql -h cockroachdb-public -p 26257 -U root -c "CREATE DATABASE IF NOT EXISTS rideshare;"
               psql -h cockroachdb-public -p 26257 -U root -c "GRANT ALL ON DATABASE rideshare TO rideshare;"
               
