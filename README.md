@@ -10,67 +10,64 @@ graph TD
     classDef service fill:#d4e6f1,stroke:#2980b9
     classDef db fill:#d5f5e3,stroke:#27ae60
     classDef obs fill:#fcf3cf,stroke:#f1c40f
-    classDef load fill:#f5cba7,stroke:#e67e22
 
-    %% Clients & Load Testing
     Client([Mobile/Web Client]) -->|REST / HTTP| Gateway
-    K6[k6-Operator<br/>50 Distributed Workers]:::load -->|1M req/s Load| Gateway
 
-    %% Gateway
-    Gateway[API Gateway :8080<br/>Gin, Rate Limiting, JWT]:::service
+    subgraph Kubernetes [Kubernetes Cluster]
+        %% Gateway
+        Gateway[API Gateway :8080<br/>Gin, Rate Limiting, JWT]:::service
 
-    %% Microservices
-    subgraph Microservices [gRPC Microservices Platform]
-        Auth[Auth Service<br/>Registration, Login]:::service
-        Ride[Ride Service<br/>Matching, Surge Pricing]:::service
-        Location[Location Service<br/>PostGIS Nearby Drivers]:::service
-        Payment[Payment Service<br/>Stripe Subscriptions]:::service
-        User[User Service<br/>Driver Profiles]:::service
+        %% Microservices
+        subgraph Microservices [gRPC Microservices Platform]
+            Auth[Auth Service<br/>Registration, Login]:::service
+            Ride[Ride Service<br/>Matching, Surge Pricing]:::service
+            Location[Location Service<br/>PostGIS Nearby Drivers]:::service
+            Payment[Payment Service<br/>Stripe Subscriptions]:::service
+            User[User Service<br/>Driver Profiles]:::service
+        end
+
+        Gateway -->|gRPC| Auth
+        Gateway -->|gRPC| Ride
+        Gateway -->|gRPC| Location
+        Gateway -->|gRPC| Payment
+        Gateway -->|gRPC| User
+
+        %% Data Plane
+        subgraph DataPlane [Distributed Data Plane]
+            Auth --> DB[(CockroachDB<br/>Distributed SQL)]:::db
+            Ride --> DB
+            Location --> DB
+            Payment --> DB
+            User --> DB
+            
+            Ride --> Redis[(Redis<br/>Locks/Caching)]:::db
+            Location --> Redis
+            
+            Ride --> Kafka[(Kafka<br/>Event Streaming)]:::db
+            Location --> Kafka
+        end
+
+        %% Observability Stack
+        subgraph Observability [Google SRE Observability Stack]
+            direction LR
+            Grafana[Grafana<br/>Dashboards]:::obs --> Prometheus[Prometheus<br/>Metrics Scraper]:::obs
+            Grafana --> Loki[Loki<br/>JSON Log Aggregation]:::obs
+            Grafana --> Jaeger[Jaeger<br/>Distributed Traces]:::obs
+            
+            Prometheus --> Alertmanager[Alertmanager<br/>Burn Rate Alerts]:::obs
+        end
+        
+        %% Implicit connections
+        Gateway -.->|OTLP Traces| Jaeger
+        Ride -.->|JSON Logs| Loki
+        Auth -.->|Scraped by| Prometheus
+
+        %% Real-time Event Flow
+        Kafka -->|Consumed Events| Gateway
     end
 
-    Gateway -->|gRPC| Auth
-    Gateway -->|gRPC| Ride
-    Gateway -->|gRPC| Location
-    Gateway -->|gRPC| Payment
-    Gateway -->|gRPC| User
-
-    %% Data Plane
-    subgraph DataPlane [Distributed Data Plane]
-        Auth --> DB[(CockroachDB<br/>Distributed SQL)]:::db
-        Ride --> DB
-        Location --> DB
-        Payment --> DB
-        User --> DB
-        
-        Gateway --> Redis[(Redis<br/>Locks/Caching)]:::db
-        Ride --> Redis
-        Location --> Redis
-        
-        Ride --> Kafka[(Kafka<br/>Event Streaming)]:::db
-        Kafka --- Zookeeper[(Zookeeper)]:::db
-    end
-
-    %% Event Flow
-    Kafka -->|Consumed Events| Gateway
     Gateway -->|WebSocket Push| Client
 
-    %% Observability Stack
-    subgraph Observability [Google SRE Observability Stack in Kubernetes]
-        direction LR
-        Grafana[Grafana<br/>Dashboards]:::obs --> Prometheus[Prometheus<br/>Metrics Scraper]:::obs
-        Grafana --> Loki[Loki<br/>JSON Log Aggregation]:::obs
-        Grafana --> Jaeger[Jaeger<br/>Distributed Traces]:::obs
-        
-        Prometheus --> Alertmanager[Alertmanager<br/>Burn Rate Alerts]:::obs
-    end
-    
-    %% Implicit connections
-    Gateway -.->|OTLP Traces| Jaeger
-    Ride -.->|JSON Logs| Promtail[Promtail<br/>DaemonSet]:::obs
-    Promtail -.->|Ships| Loki
-    
-    Microservices -.->|Scraped by| Prometheus
-    NodeExporter[node_exporter<br/>DaemonSet]:::obs -.->|Host Metrics| Prometheus
 ```
 
 ## Quick Start
