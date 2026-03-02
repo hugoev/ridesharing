@@ -1,73 +1,67 @@
 # 🚗 RideShare Platform
 
-Enterprise ride-sharing backend built with Go, PostgreSQL, Redis, and Kafka.
+Distributed ride-sharing platform engineered for hyperscale. Built with **Go**, **gRPC**, **CockroachDB**, **Kafka**, and **Kubernetes** — following Google SRE and Uber-style microservices patterns.
 
 ## Architecture
 
 ```mermaid
 graph TD
-    classDef infra fill:#f5f5f5,stroke:#999
-    classDef service fill:#d4e6f1,stroke:#2980b9
-    classDef db fill:#d5f5e3,stroke:#27ae60
-    classDef obs fill:#fcf3cf,stroke:#f1c40f
+    classDef gateway fill:#1a1a2e,stroke:#e94560,color:#fff
+    classDef svc fill:#16213e,stroke:#0f3460,color:#fff
+    classDef data fill:#0f3460,stroke:#53354a,color:#fff
+    classDef obs fill:#1b1b2f,stroke:#f1c40f,color:#f1c40f
+    classDef client fill:#e94560,stroke:#e94560,color:#fff
 
-    Client([Mobile/Web Client]) -->|REST / HTTP| Gateway
+    Client([📱 Mobile & Web Clients]):::client -->|HTTPS / REST| LB
 
-    subgraph Kubernetes [Kubernetes Cluster]
-        %% Gateway
-        Gateway[API Gateway :8080<br/>Gin, Rate Limiting, JWT]:::service
+    subgraph K8s ["☸ Kubernetes Cluster — Auto-Scaling via HPA"]
 
-        %% Microservices
-        subgraph Microservices [gRPC Microservices Platform]
-            Auth[Auth Service<br/>Registration, Login]:::service
-            Ride[Ride Service<br/>Matching, Surge Pricing]:::service
-            Location[Location Service<br/>PostGIS Nearby Drivers]:::service
-            Payment[Payment Service<br/>Stripe Subscriptions]:::service
-            User[User Service<br/>Driver Profiles]:::service
+        LB[Load Balancer / Ingress]:::gateway -->|Route| GW
+
+        subgraph BFF ["API Gateway — BFF Pattern"]
+            GW["Gateway :8080<br/>JWT Auth · Rate Limiter · CORS · Circuit Breaker"]:::gateway
         end
 
-        Gateway -->|gRPC| Auth
-        Gateway -->|gRPC| Ride
-        Gateway -->|gRPC| Location
-        Gateway -->|gRPC| Payment
-        Gateway -->|gRPC| User
-
-        %% Data Plane
-        subgraph DataPlane [Distributed Data Plane]
-            Auth --> DB[(CockroachDB<br/>Distributed SQL)]:::db
-            Ride --> DB
-            Location --> DB
-            Payment --> DB
-            User --> DB
-            
-            Ride --> Redis[(Redis<br/>Locks/Caching)]:::db
-            Location --> Redis
-            
-            Ride --> Kafka[(Kafka<br/>Event Streaming)]:::db
-            Location --> Kafka
+        subgraph Services ["gRPC Microservices"]
+            Auth["Auth<br/>bcrypt · Token Pairs · Lockout"]:::svc
+            User["User<br/>Profiles · Availability"]:::svc
+            Ride["Ride<br/>Matching · Surge Pricing"]:::svc
+            Location["Location<br/>PostGIS · Geofencing"]:::svc
+            Payment["Payment<br/>Idempotent Charges"]:::svc
         end
 
-        %% Observability Stack
-        subgraph Observability [Google SRE Observability Stack]
+        GW -->|gRPC| Auth
+        GW -->|gRPC| User
+        GW -->|gRPC| Ride
+        GW -->|gRPC| Location
+        GW -->|gRPC| Payment
+
+        subgraph Data ["Distributed Data Plane"]
+            DB[(CockroachDB<br/>Distributed SQL)]:::data
+            Cache[(Redis<br/>Locks · Rate Limits)]:::data
+            MQ[(Kafka<br/>Event Streaming)]:::data
+        end
+
+        Auth & User & Ride & Location & Payment --> DB
+        Ride & Location --> Cache
+        Ride & Location -->|Produce| MQ
+        MQ -->|Consume| GW
+
+        subgraph Observe ["Observability — Google SRE Stack"]
             direction LR
-            Grafana[Grafana<br/>Dashboards]:::obs --> Prometheus[Prometheus<br/>Metrics Scraper]:::obs
-            Grafana --> Loki[Loki<br/>JSON Log Aggregation]:::obs
-            Grafana --> Jaeger[Jaeger<br/>Distributed Traces]:::obs
-            
-            Prometheus --> Alertmanager[Alertmanager<br/>Burn Rate Alerts]:::obs
+            Prom[Prometheus<br/>Metrics & Alerts]:::obs
+            Trace[Jaeger<br/>Distributed Tracing]:::obs
+            Log[Loki + Promtail<br/>Structured Logs]:::obs
+            Dash[Grafana<br/>SLO Dashboards]:::obs
         end
-        
-        %% Implicit connections
-        Gateway -.->|OTLP Traces| Jaeger
-        Ride -.->|JSON Logs| Loki
-        Auth -.->|Scraped by| Prometheus
 
-        %% Real-time Event Flow
-        Kafka -->|Consumed Events| Gateway
+        GW -.->|OpenTelemetry| Trace
+        Services -.->|Scrape| Prom
+        Services -.->|JSON Logs| Log
+        Dash --- Prom & Trace & Log
     end
 
-    Gateway -->|WebSocket Push| Client
-
+    GW -->|WebSocket| Client
 ```
 
 ## Quick Start
