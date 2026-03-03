@@ -223,6 +223,26 @@ Distributed k6 load test designed for **1M req/s** inside the Kubernetes cluster
 
 ---
 
+## Benchmarks
+
+Hot-path function performance on Apple M1 Pro (`go test -bench`):
+
+| Function | ns/op | ops/sec | Allocations |
+|----------|------:|--------:|:-----------:|
+| `Haversine` (geo distance) | 39 ns | **~25M/s** | 0 allocs |
+| `EstimateFare` (pricing) | 0.39 ns | **~2.5B/s** | 0 allocs |
+| `EstimateETA` | 0.31 ns | **~3.2B/s** | 0 allocs |
+| `GenerateToken` (JWT sign) | 2,381 ns | **~420K/s** | 42 allocs |
+| `ValidateToken` (JWT verify) | 4,033 ns | **~248K/s** | 57 allocs |
+| `GenerateTokenPair` (access + refresh) | 5,185 ns | **~193K/s** | 91 allocs |
+
+```bash
+# Reproduce
+go test -bench=. -benchmem ./pkg/geo/ ./pkg/jwt/
+```
+
+---
+
 ## Development
 
 ```bash
